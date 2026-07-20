@@ -1,0 +1,31 @@
+{
+  "_note": "Fallback initial water levels (% of station design capacity) and ThaiWater-style gauge snapshot used when live HII/ThaiWater endpoints are unreachable. Values are a plausible wet-season baseline, not live readings — the UI shows a 'cached' badge when this file is in use.",
+  "levels": {
+    "phrakhanong": 68,
+    "makkasan": 62,
+    "saensaep-minburi": 74,
+    "premprachakon": 71,
+    "latphrao-gate": 66,
+    "rama9-tunnel": 55,
+    "khlongtoei": 60,
+    "prawet-gate": 72,
+    "thewet": 52,
+    "bangsue-pump": 63,
+    "bangsue-tunnel": 48,
+    "rajinee": 50,
+    "sathorn": 57,
+    "bangna": 64,
+    "nongbon": 58,
+    "bangkhen-gate": 69,
+    "phasicharoen": 61,
+    "samsen": 54
+  },
+  "gauges": [
+    { "id": "CPY012", "name": "เจ้าพระยา สะพานพุทธ", "canal": "แม่น้ำเจ้าพระยา", "waterlevel_m": 1.32, "bank_m": 2.5, "district": "พระนคร" },
+    { "id": "BKK021", "name": "คลองแสนแสบ ประตูน้ำ", "canal": "คลองแสนแสบ", "waterlevel_m": 0.84, "bank_m": 1.8, "district": "ราชเทวี" },
+    { "id": "BKK034", "name": "คลองลาดพร้าว วัดลาดพร้าว", "canal": "คลองลาดพร้าว", "waterlevel_m": 1.05, "bank_m": 1.9, "district": "ลาดพร้าว" },
+    { "id": "BKK047", "name": "คลองเปรมประชากร ดอนเมือง", "canal": "คลองเปรมประชากร", "waterlevel_m": 1.18, "bank_m": 2.0, "district": "ดอนเมือง" },
+    { "id": "BKK052", "name": "คลองประเวศบุรีรมย์ ลาดกระบัง", "canal": "คลองประเวศบุรีรมย์", "waterlevel_m": 1.22, "bank_m": 1.85, "district": "ลาดกระบัง" },
+    { "id": "BKK063", "name": "คลองพระโขนง ปากคลอง", "canal": "คลองพระโขนง", "waterlevel_m": 0.95, "bank_m": 1.75, "district": "พระโขนง" }
+  ]
+}
