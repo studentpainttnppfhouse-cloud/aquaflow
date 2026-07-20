@@ -1,0 +1,174 @@
+@import 'leaflet/dist/leaflet.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-hud-bg font-thai text-hud-text antialiased;
+}
+
+/* ── scrollbars (dark panels) ─────────────────────────────────────────── */
+.panel-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.panel-scroll::-webkit-scrollbar-thumb {
+  @apply rounded bg-hud-edge;
+}
+
+/* ── map station markers ──────────────────────────────────────────────── */
+.stn-marker {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 9999px;
+  color: #04121f;
+  font-weight: 800;
+  font-size: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.6);
+}
+.stn-ok {
+  background: #34d399;
+}
+.stn-watch {
+  background: #fbbf24;
+}
+.stn-risk {
+  background: #f87171;
+}
+.stn-pumping {
+  background: #22d3ee;
+}
+.stn-marker::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  border: 2px solid currentColor;
+  opacity: 0;
+}
+.stn-risk::after,
+.stn-pumping::after {
+  color: inherit;
+  animation: stn-pulse 1.6s ease-out infinite;
+}
+.stn-risk::after {
+  border-color: #f87171;
+}
+.stn-pumping::after {
+  border-color: #22d3ee;
+}
+@keyframes stn-pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+/* ── canal flow animation (dash marches toward the river on pumping canals) ── */
+.canal-flowing {
+  stroke-dasharray: 6 10;
+  animation: canal-flow 1.2s linear infinite;
+}
+@keyframes canal-flow {
+  to {
+    stroke-dashoffset: -32;
+  }
+}
+
+/* leaflet dark-theme popup */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  @apply bg-hud-panel text-hud-text;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
+}
+.leaflet-popup-content {
+  margin: 12px 14px;
+}
+.leaflet-container {
+  font-family: inherit;
+  background: #060d17;
+}
+.citizen-map .leaflet-popup-content-wrapper,
+.citizen-map .leaflet-popup-tip {
+  background: #ffffff;
+  color: #1f2937;
+}
+.citizen-map .leaflet-container {
+  background: #dbeafe;
+}
+
+/* ── narration strip shimmer ─────────────────────────────────────────── */
+.narration-enter {
+  animation: narr-in 420ms ease-out;
+}
+@keyframes narr-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* ── rain radar blobs ────────────────────────────────────────────────── */
+.radar-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(10px);
+  animation: blob-drift 7s ease-in-out infinite alternate;
+}
+@keyframes blob-drift {
+  from {
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    transform: translate(14px, -10px) scale(1.15);
+  }
+}
+.radar-sweep {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: conic-gradient(from 0deg, rgba(34, 211, 238, 0.35), transparent 24%);
+  animation: sweep 3.4s linear infinite;
+}
+@keyframes sweep {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── citizen phone frame ─────────────────────────────────────────────── */
+.phone-frame {
+  width: min(400px, 96vw);
+  height: min(820px, 94vh);
+  border-radius: 2.4rem;
+  border: 10px solid #0f172a;
+  box-shadow:
+    0 0 0 2px #1e293b,
+    0 30px 70px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
+/* ── reduced motion: kill decorative animation, keep state changes ───── */
+@media (prefers-reduced-motion: reduce) {
+  .stn-risk::after,
+  .stn-pumping::after,
+  .canal-flowing,
+  .radar-blob,
+  .radar-sweep {
+    animation: none !important;
+  }
+}
