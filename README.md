@@ -18,6 +18,41 @@ Two perspectives, one shared live state:
   nearby canal levels, a local mini-map, push-style alerts, and safety tips.
   When the operator approves a drain action, the citizen card visibly eases red → green.
 
+## 📣 Reach every phone — multi-channel alerting
+
+A dashboard only helps people who are looking at it. AquaFlow's alerting layer is
+built so a warning lands on **every** phone in a district — a basic feature phone
+with no app and weak signal included — not only on smartphones:
+
+- **One `sendAlert()` fans out over four channels** (`src/engine/alerting.ts`):
+  📩 **SMS** (every handset) · 📡 **Cell Broadcast** (emergency broadcast to a whole
+  cell tower) · 💬 **LINE** (smartphone users) · 📞 **สายด่วนเสียง / IVR** (an
+  automated Thai voice call + in-app read-aloud for the elderly and non-readers).
+- **Every provider sits behind one `ChannelProvider` interface**, so a real gateway
+  drops in unchanged — Twilio / ThaiBulkSMS / AIS / TrueMove for SMS, Thailand's
+  **DDPM (ปภ.) Cell Broadcast**, the **LINE Messaging API**, and a voice/IVR provider.
+  The exact plug-in points are marked `--- REAL GATEWAY GOES HERE ---` in the code.
+- **The AI drives it end-to-end**: each district gets a severity on the escalation
+  ladder (🟢 ปกติ · 🟡 เฝ้าระวัง · 🟠 เตือนภัย · 🔴 ฉุกเฉิน), the planner **auto-drafts a
+  plain-Thai message** for that severity, and the operator broadcasts to one zone or
+  **one-taps "กระจายเตือนทุกเขตที่เสี่ยง"** to hit every affected district at once.
+- **Honest telecom detail**: Thai SMS is UCS-2, not GSM-7, so the UI reports the true
+  segment count (70 chars / part, 67 concatenated) and messages are kept plain — no
+  emoji dependence — so they render on a feature phone.
+- **Delivery ledger + retry**: fan-out shows live per-channel `sent/total` counts,
+  retries failures up to 3× with backoff, and **never fails silently** — an exhausted
+  send ends visibly as `failed`.
+- **Offline resilience**: flip the connectivity simulator and new alerts are **queued**,
+  then automatically **flushed on reconnect** — an alert is never dropped on a bad link.
+- **Zone registry** (`src/data/zones.ts`): per-district population + a representative
+  contact roll grouped by role (ประชาชน / ผู้นำชุมชน / เจ้าหน้าที่). Every name and phone
+  number is **synthetic and deterministic — no real personal data** — standing in for
+  the อบต./เขต rolls and telecom cell-area maps a production deployment would hold.
+
+HONESTY NOTE: like the rest of the demo, the fan-out is **simulated and labeled
+"จำลอง"** — no carrier is actually contacted; the value is the working end-to-end
+loop and the drop-in provider seams.
+
 ## Run it
 
 ```bash
@@ -76,9 +111,12 @@ src/
                           # rAF easing loop: risk & levels glide to targets over ~1–2 s
   data/adapters/          # openMeteo · thaiWater · tide · stations (live → fallback)
   data/fallback/          # committed snapshots: stations, canals, waterLevels, openMeteo
+  data/zones.ts           # synthetic per-district population + recipient roll (by role)
   engine/recommend.ts     # coordinated heuristic planner (ML-replaceable interface)
+  engine/alerting.ts      # multi-channel fan-out (SMS/cell broadcast/LINE/voice),
+                          # severity ladder, Thai message drafting, retry — provider-abstracted
   views/control/          # ControlCenter · MapPanel · RecommendationPanel · RiskGauge
-                          # StatStrip · Narration · SidePanels (bars, radar, tide)
+                          # StatStrip · Narration · BroadcastPanel · SidePanels (bars, radar, tide)
   views/citizen/          # CitizenApp · HeroStatus · CanalList · Alerts · MiniMap
 ```
 

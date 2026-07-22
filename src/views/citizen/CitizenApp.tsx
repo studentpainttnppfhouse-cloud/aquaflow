@@ -13,6 +13,8 @@ export default function CitizenApp() {
   const stations = useAppStore((s) => s.stations)
   const district = useAppStore((s) => s.district)
   const setDistrict = useAppStore((s) => s.setDistrict)
+  const a11yLarge = useAppStore((s) => s.a11yLarge)
+  const setA11yLarge = useAppStore((s) => s.setA11yLarge)
 
   const districts = useMemo(
     () => [...new Set(stations.map((s) => s.district))].sort((a, b) => a.localeCompare(b, 'th')),
@@ -21,7 +23,7 @@ export default function CitizenApp() {
 
   return (
     <div className="grid h-full place-items-center bg-[#0a1420] p-3">
-      <div className="phone-frame flex flex-col bg-slate-50 text-slate-800">
+      <div className={`phone-frame flex flex-col bg-slate-50 text-slate-800 ${a11yLarge ? 'a11y-large' : ''}`}>
         <header className="flex items-center justify-between bg-white px-4 pb-2 pt-4 shadow-sm">
           <div>
             <div className="text-xs text-slate-400">AquaFlow ประชาชน</div>
@@ -30,7 +32,7 @@ export default function CitizenApp() {
               <select
                 value={district}
                 onChange={(e) => setDistrict(e.target.value)}
-                className="max-w-[13rem] cursor-pointer appearance-none bg-transparent font-extrabold outline-none"
+                className="max-w-[11rem] cursor-pointer appearance-none bg-transparent font-extrabold outline-none"
                 aria-label="เลือกเขตของคุณ"
               >
                 {districts.map((d) => (
@@ -42,7 +44,16 @@ export default function CitizenApp() {
               <span className="text-xs text-slate-400">▾</span>
             </label>
           </div>
-          <span className="text-2xl">🌊</span>
+          <button
+            onClick={() => setA11yLarge(!a11yLarge)}
+            aria-pressed={a11yLarge}
+            title="ปรับขนาดตัวอักษรใหญ่ขึ้น สำหรับผู้สูงอายุ/สายตาเลือนราง"
+            className={`rounded-lg border px-2 py-1 text-sm font-extrabold ${
+              a11yLarge ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 text-slate-500'
+            }`}
+          >
+            ก<span className="text-base">ก</span>
+          </button>
         </header>
 
         <main className="min-h-0 flex-1 overflow-y-auto">

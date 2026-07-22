@@ -6,6 +6,7 @@ import Narration from './Narration'
 import RecommendationPanel from './RecommendationPanel'
 import RiskGauge from './RiskGauge'
 import StatStrip from './StatStrip'
+import BroadcastPanel from './BroadcastPanel'
 import { ActivityLog, RainRadar, StationBars, TideSpark } from './SidePanels'
 import { fmtClock } from '../../lib/util'
 
@@ -25,6 +26,7 @@ export default function ControlCenter() {
         </section>
         <section className="order-3 flex w-full flex-col gap-2 overflow-y-auto panel-scroll lg:w-[19rem]">
           <RiskGauge />
+          <BroadcastPanel />
           <TideSpark />
           <RainRadar />
           <StationBars />
