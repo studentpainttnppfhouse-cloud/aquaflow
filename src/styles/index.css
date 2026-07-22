@@ -162,6 +162,22 @@ body {
   overflow: hidden;
 }
 
+/* ── accessibility: large-text mode for elderly / low-vision residents ── */
+.a11y-large {
+  font-size: 1.18rem;
+  line-height: 1.6;
+}
+.a11y-large .text-xs {
+  font-size: 0.9rem;
+}
+.a11y-large .text-sm {
+  font-size: 1.02rem;
+}
+.a11y-large .text-\[10px\],
+.a11y-large .text-\[11px\] {
+  font-size: 0.82rem;
+}
+
 /* ── reduced motion: kill decorative animation, keep state changes ───── */
 @media (prefers-reduced-motion: reduce) {
   .stn-risk::after,
