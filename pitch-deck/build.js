@@ -158,22 +158,32 @@ function label(s, txt, o) {
 {
   const s = p.addSlide(); bg(s, C.khlong);
   rail(s, 4, true);
-  // large faded gauge-column motif + water rising
-  const gx = px(560), gw = px(240), gtop = px(120), gbot = H - px(120), gh = gbot - gtop;
-  s.addShape(p.ShapeType.rect, { x: gx, y: gtop, w: gw, h: gh, fill: { color: C.panelDark }, line: { type: "none" } });
-  // banded gradations
-  for (let i = 0; i < 14; i++) {
-    if (i % 2 === 0) s.addShape(p.ShapeType.rect, { x: gx, y: gtop + (i / 14) * gh, w: gw, h: gh / 14, fill: { color: C.khlong, transparency: 40 }, line: { type: "none" } });
-  }
-  // water fill (about 60%)
-  const wl = gtop + gh * 0.42;
-  s.addShape(p.ShapeType.rect, { x: gx, y: wl, w: gw, h: gbot - wl, fill: { color: C.paddy, transparency: 15 }, line: { type: "none" } });
-  s.addShape(p.ShapeType.line, { x: gx - px(30), y: wl, w: gw + px(60), h: 0, line: { color: C.drought, width: 2.4 } });
-  // flood line
-  s.addShape(p.ShapeType.line, { x: gx - px(30), y: gtop + gh * 0.14, w: gw + px(60), h: 0, line: { color: C.gauge, width: 2.4, dashType: "dash" } });
-  // ripples
-  for (let i = 0; i < 5; i++) s.addShape(p.ShapeType.ellipse, { x: gx + gw + px(120 + i * 140), y: wl + px(40 + i * 30), w: px(200 - i * 20), h: px(60 - i * 6), line: { color: C.paddy, width: 1, transparency: 40 } });
-  s.addNotes("Zero text. The breath before the pivot. Ideal: full-bleed Higgsfield photo of a flooded Bangkok street (image #1 in IMAGES.md).");
+  // Flooded city at dusk — full-bleed composition. horizon at 52%.
+  const horizon = H * 0.52;
+  // dusk glow band just above the horizon (drought, faint)
+  s.addShape(p.ShapeType.rect, { x: 0, y: horizon - px(150), w: W, h: px(150), fill: { color: C.drought, transparency: 82 }, line: { type: "none" } });
+  s.addShape(p.ShapeType.rect, { x: 0, y: horizon - px(70), w: W, h: px(70), fill: { color: C.drought, transparency: 68 }, line: { type: "none" } });
+  // skyline silhouette sitting on the horizon
+  const bld = [[0.10,150,90],[0.16,240,110],[0.23,180,80],[0.30,320,120],[0.40,220,100],[0.52,380,140],[0.63,260,110],[0.72,300,120],[0.82,200,90],[0.90,150,80]];
+  bld.forEach(([fx,h,w]) => {
+    const bx = W * fx - px(w) / 2, by = horizon - px(h);
+    s.addShape(p.ShapeType.rect, { x: bx, y: by, w: px(w), h: px(h), fill: { color: "0A2E2F" }, line: { type: "none" } });
+    // reflection in the water (fainter, inverted)
+    s.addShape(p.ShapeType.rect, { x: bx, y: horizon, w: px(w), h: px(h * 0.5), fill: { color: "0A2E2F", transparency: 55 }, line: { type: "none" } });
+  });
+  // water plane
+  s.addShape(p.ShapeType.rect, { x: 0, y: horizon, w: W, h: H - horizon, fill: { color: C.paddy, transparency: 30 }, line: { type: "none" } });
+  // clean ripple lines
+  for (let i = 1; i <= 3; i++) s.addShape(p.ShapeType.line, { x: px(220), y: horizon + i * px(120), w: W - px(440), h: 0, line: { color: C.sluice, width: 0.75, transparency: 72 } });
+  // staff gauge pole standing in the flood (motif) — left of centre
+  const px0 = px(520), pw = px(46), ptop = horizon - px(260), pbot = H - px(70);
+  s.addShape(p.ShapeType.rect, { x: px0, y: ptop, w: pw, h: pbot - ptop, fill: { color: C.sluice }, line: { color: C.ink, width: 1 } });
+  const bands = 12, ph = pbot - ptop;
+  for (let i = 0; i < bands; i++) if (i % 2 === 0) s.addShape(p.ShapeType.rect, { x: px0, y: ptop + (i / bands) * ph, w: pw, h: ph / bands, fill: { color: C.gauge }, line: { type: "none" } });
+  // waterline across the pole + red flood line above it
+  s.addShape(p.ShapeType.line, { x: px0 - px(60), y: horizon, w: px(160), h: 0, line: { color: C.drought, width: 2.4 } });
+  s.addShape(p.ShapeType.line, { x: px0 - px(60), y: ptop + ph * 0.22, w: px(160), h: 0, line: { color: C.gauge, width: 2.4, dashType: "dash" } });
+  s.addNotes("Zero text. The breath before the pivot — a flooded city at dusk with the gauge pole submerged past its flood line. Optional: replace with the full-bleed Higgsfield photo (flood.png, image #1 in IMAGES.md).");
 }
 
 // =====================================================================
@@ -372,15 +382,30 @@ function process(n, marker, thai, en) {
 {
   const s = p.addSlide(); bg(s, C.khlong);
   rail(s, 13, true);
-  // stylized: phone easing red -> green over water
-  const cxp = px(760), cyp = px(230), cw = px(400), ch = px(620);
-  s.addShape(p.ShapeType.roundRect, { x: cxp, y: cyp, w: cw, h: ch, rectRadius: 0.1, fill: { color: C.sluice }, line: { color: C.ink, width: 2 }, shadow: { type:"outer", color:"000000", opacity:0.4, blur:14, offset:6, angle:90 } });
-  // split red->green band
-  s.addShape(p.ShapeType.rect, { x: cxp+px(24), y: cyp+px(30), w: cw-px(48), h: px(260), fill: { color: C.gauge }, line: {type:"none"} });
-  s.addShape(p.ShapeType.rect, { x: cxp+px(24), y: cyp+px(30)+px(130), w: cw-px(48), h: px(130), fill: { color: C.paddy }, line: {type:"none"} });
-  // ripples below
-  for (let i=0;i<6;i++) s.addShape(p.ShapeType.ellipse, { x: px(300)+i*px(70), y: px(600)+ (i%3)*px(60), w: px(240-i*10), h: px(64), fill:{type:"none"}, line:{ color:C.paddy, width:1, transparency:50 } });
-  s.addNotes("Zero text. Product in context. Ideal: Higgsfield photo of the gauge pole in a khlong, or a phone in a farmer/resident's hand (images #2/#3 in IMAGES.md).");
+  // Product in context — the citizen app in a real canal, easing red -> green. horizon at 60%.
+  const horizon = H * 0.60;
+  // calm canal water
+  s.addShape(p.ShapeType.rect, { x: 0, y: horizon, w: W, h: H - horizon, fill: { color: C.paddy, transparency: 26 }, line: { type: "none" } });
+  s.addShape(p.ShapeType.rect, { x: 0, y: horizon - px(60), w: W, h: px(60), fill: { color: C.paddy, transparency: 62 }, line: { type: "none" } });
+  for (let i = 1; i <= 3; i++) s.addShape(p.ShapeType.line, { x: px(160), y: horizon + i * px(110), w: W - px(320), h: 0, line: { color: C.sluice, width: 0.75, transparency: 74 } });
+  // staff gauge pole in the canal (motif), left
+  const gpx = px(360), gpw = px(40), gtop = horizon - px(300), gbot = H - px(90), gph = gbot - gtop;
+  s.addShape(p.ShapeType.rect, { x: gpx, y: gtop, w: gpw, h: gph, fill: { color: C.sluice }, line: { color: C.ink, width: 1 } });
+  for (let i = 0; i < 12; i++) if (i % 2 === 0) s.addShape(p.ShapeType.rect, { x: gpx, y: gtop + (i / 12) * gph, w: gpw, h: gph / 12, fill: { color: C.gauge }, line: { type: "none" } });
+  s.addShape(p.ShapeType.line, { x: gpx - px(46), y: horizon, w: px(132), h: 0, line: { color: C.drought, width: 2.2 } });
+  // citizen phone, centre-right, held over the water — the product
+  const cxp = px(1010), cyp = px(150), cw = px(380), ch = px(680);
+  s.addShape(p.ShapeType.roundRect, { x: cxp, y: cyp, w: cw, h: ch, rectRadius: 0.11, fill: { color: C.sluice }, line: { color: C.ink, width: 2 }, shadow: { type: "outer", color: "000000", opacity: 0.45, blur: 16, offset: 7, angle: 90 } });
+  // status hero easing to green (safe)
+  s.addShape(p.ShapeType.roundRect, { x: cxp + px(22), y: cyp + px(26), w: cw - px(44), h: px(190), rectRadius: 0.08, fill: { color: C.paddy }, line: { type: "none" } });
+  s.addShape(p.ShapeType.rect, { x: cxp + px(22), y: cyp + px(26), w: (cw - px(44)) * 0.28, h: px(190), fill: { color: C.gauge }, line: { type: "none" } });
+  // canal list rows
+  for (let i = 0; i < 4; i++) {
+    const ly = cyp + px(240) + i * px(96);
+    s.addShape(p.ShapeType.roundRect, { x: cxp + px(22), y: ly, w: cw - px(44), h: px(76), rectRadius: 0.1, fill: { color: C.panelLight }, line: { type: "none" } });
+    s.addShape(p.ShapeType.rect, { x: cxp + px(22), y: ly, w: (cw - px(44)) * [0.42, 0.55, 0.30, 0.48][i], h: px(76), fill: { color: [C.drought, C.gauge, C.paddy, C.drought][i], transparency: 30 }, line: { type: "none" } });
+  }
+  s.addNotes("Zero text. The citizen app in a real canal — the district easing red -> green beside the gauge pole. Optional: replace with the Higgsfield gauge-pole photo (image #2 in IMAGES.md).");
 }
 
 // =====================================================================
