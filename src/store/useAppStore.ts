@@ -42,6 +42,8 @@ interface AppState {
   narration: string
   storm: boolean
   feeds: { rain: DataFeed; water: DataFeed; tide: DataFeed; stations: DataFeed }
+  /** Station selected on the Control Center map — drives the Node Detail rail panel. */
+  selectedStationId: string | null
 
   init: () => Promise<void>
   setView: (v: View) => void
@@ -50,6 +52,7 @@ interface AppState {
   setMode: (m: OpsMode) => void
   approve: (recId: string) => void
   commandStation: (stationId: string) => void
+  selectStation: (stationId: string | null) => void
   simulateStorm: () => void
   reset: () => void
 }
@@ -213,6 +216,7 @@ export const useAppStore = create<AppState>((set, get) => {
     narration: 'กำลังเชื่อมต่อแหล่งข้อมูล…',
     storm: false,
     feeds: { rain: 'cached', water: 'cached', tide: 'modeled', stations: 'cached' },
+    selectedStationId: null,
 
     init: async () => {
       if (get().ready) return
@@ -313,6 +317,7 @@ export const useAppStore = create<AppState>((set, get) => {
       if (rec) execute(rec.stationId, rec.action)
     },
     commandStation: (stationId) => execute(stationId, 'pump'),
+    selectStation: (stationId) => set({ selectedStationId: stationId }),
 
     simulateStorm: () => {
       if (get().storm) return

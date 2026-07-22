@@ -10,7 +10,7 @@ export default function ViewSwitcher() {
       active ? 'bg-hud-cyan text-slate-900' : 'text-hud-text/80 hover:bg-white/10'
     }`
   return (
-    <div className="fixed right-3 top-3 z-[1200] flex items-center gap-1 rounded-full border border-white/15 bg-slate-900/85 p-1 shadow-lg backdrop-blur">
+    <div className="fixed right-3 top-3 z-[1200] flex items-center gap-1 rounded-full border border-hud-edge bg-hud-panelSolid/90 p-1 shadow-lg backdrop-blur">
       <button className={btn(view.includes('control'))} onClick={() => setView('control')}>
         🖥️ ศูนย์ควบคุม
       </button>

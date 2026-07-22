@@ -6,10 +6,11 @@ export default function Narration() {
   return (
     <div
       key={narration}
-      className="narration-enter border-b border-hud-edge bg-gradient-to-r from-hud-panel via-[#0a1c2e] to-hud-panel px-4 py-1.5 text-sm text-hud-cyan/95"
+      className="narration-enter flex items-center gap-2 border-b border-hud-edge bg-black/20 px-4 py-1.5 text-sm text-hud-cyan/95"
       role="status"
       aria-live="polite"
     >
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-hud-cyan status-dot-live" aria-hidden />
       {narration}
     </div>
   )

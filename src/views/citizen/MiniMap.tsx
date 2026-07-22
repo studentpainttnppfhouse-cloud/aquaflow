@@ -2,8 +2,8 @@ import { MapContainer, Marker, Polyline, Popup, TileLayer } from 'react-leaflet'
 import L from 'leaflet'
 import { districtCenter, useAppStore } from '../../store/useAppStore'
 
-// CARTO light basemap for the citizen look.
-const LIGHT_TILES = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+// CARTO dark basemap — matches the app-wide command-center palette.
+const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
 const ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
 
@@ -15,8 +15,8 @@ export default function MiniMap() {
   const local = stations.filter((s) => s.district === district)
 
   return (
-    <div className="overflow-hidden rounded-xl bg-white shadow-sm">
-      <div className="px-3 pt-2 text-sm font-bold text-slate-900">🗺️ แผนที่ย่านของคุณ</div>
+    <div className="glass-panel overflow-hidden">
+      <div className="px-3 pt-2 text-sm font-bold text-hud-text">🗺️ แผนที่ย่านของคุณ</div>
       <div className="citizen-map mt-1 h-44">
         <MapContainer
           key={district}
@@ -27,12 +27,12 @@ export default function MiniMap() {
           scrollWheelZoom={false}
           attributionControl={true}
         >
-          <TileLayer url={LIGHT_TILES} attribution={ATTRIBUTION} subdomains="abcd" maxZoom={19} />
+          <TileLayer url={DARK_TILES} attribution={ATTRIBUTION} subdomains="abcd" maxZoom={19} />
           {canals.map((c) => (
             <Polyline
               key={c.id}
               positions={c.path}
-              pathOptions={{ color: c.kind === 'river' ? '#60a5fa' : '#7dd3fc', weight: c.kind === 'river' ? 4 : 2.5, opacity: 0.7 }}
+              pathOptions={{ color: c.kind === 'river' ? '#2a4d6e' : '#254564', weight: c.kind === 'river' ? 4 : 2.5, opacity: 0.8 }}
             />
           ))}
           {local.map((s) => (

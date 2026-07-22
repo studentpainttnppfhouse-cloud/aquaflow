@@ -20,32 +20,32 @@ export default function CitizenApp() {
   )
 
   return (
-    <div className="grid h-full place-items-center bg-[#0a1420] p-3">
-      <div className="phone-frame flex flex-col bg-slate-50 text-slate-800">
-        <header className="flex items-center justify-between bg-white px-4 pb-2 pt-4 shadow-sm">
+    <div className="grid h-full place-items-center bg-gradient-to-b from-hud-bg to-hud-bg2 p-3">
+      <div className="phone-frame flex flex-col bg-hud-bg text-hud-text">
+        <header className="flex shrink-0 items-center justify-between border-b border-hud-edge bg-hud-panelSolid px-4 pb-2.5 pt-4">
           <div>
-            <div className="text-xs text-slate-400">AquaFlow ประชาชน</div>
-            <label className="flex items-center gap-1 text-lg font-extrabold text-slate-900">
+            <div className="label-tech">AquaFlow ประชาชน</div>
+            <label className="mt-0.5 flex items-center gap-1 text-lg font-extrabold text-hud-text">
               📍
               <select
                 value={district}
                 onChange={(e) => setDistrict(e.target.value)}
-                className="max-w-[13rem] cursor-pointer appearance-none bg-transparent font-extrabold outline-none"
+                className="max-w-[13rem] cursor-pointer appearance-none bg-transparent font-extrabold text-hud-text outline-none"
                 aria-label="เลือกเขตของคุณ"
               >
                 {districts.map((d) => (
-                  <option key={d} value={d}>
+                  <option key={d} value={d} className="bg-hud-panelSolid text-hud-text">
                     เขต{d}
                   </option>
                 ))}
               </select>
-              <span className="text-xs text-slate-400">▾</span>
+              <span className="text-xs text-hud-dim">▾</span>
             </label>
           </div>
           <span className="text-2xl">🌊</span>
         </header>
 
-        <main className="min-h-0 flex-1 overflow-y-auto">
+        <main className="min-h-0 flex-1 overflow-y-auto panel-scroll">
           {tab === 'home' && (
             <div className="space-y-3 p-3">
               <HeroStatus />
@@ -59,7 +59,7 @@ export default function CitizenApp() {
           {tab === 'about' && <AboutTab />}
         </main>
 
-        <nav className="grid grid-cols-3 border-t border-slate-200 bg-white text-center text-xs">
+        <nav className="grid shrink-0 grid-cols-3 border-t border-hud-edge bg-hud-panelSolid text-center text-xs">
           {(
             [
               ['home', '🏠', 'หน้าหลัก'],
@@ -70,7 +70,7 @@ export default function CitizenApp() {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`py-2.5 font-semibold ${tab === t ? 'text-sky-600' : 'text-slate-400'}`}
+              className={`py-2.5 font-semibold transition ${tab === t ? 'text-hud-cyan' : 'text-hud-dim'}`}
             >
               <div className="text-base">{icon}</div>
               {label}
@@ -89,8 +89,8 @@ function DrainBanner() {
   const anyPumping = useAppStore((s) => s.stations.some((st) => st.pumping))
   if (!active && !anyPumping) return null
   return (
-    <div className="flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800">
-      <span className="animate-pulse text-lg">🛟</span>
+    <div className="flex items-center gap-2 rounded-xl border border-hud-cyan/30 bg-hud-cyan/10 px-3 py-2 text-sm text-hud-cyan">
+      <span className="status-dot-live text-lg">🛟</span>
       {active
         ? 'ศูนย์ควบคุมกำลังเร่งระบายน้ำในพื้นที่ของคุณ — ระดับน้ำกำลังลดลง'
         : 'ศูนย์ควบคุมกำลังระบายน้ำในโครงข่ายคลองของเมือง'}
@@ -111,12 +111,12 @@ function SafetyTips() {
         ? ['ติดตามระดับน้ำคลองใกล้บ้านเป็นระยะ', 'ตรวจทางระบายน้ำหน้าบ้านไม่ให้มีขยะอุดตัน', 'วางแผนเส้นทางเลี่ยงจุดที่ท่วมประจำ']
         : ['ใช้ชีวิตได้ตามปกติ', 'ช่วยกันไม่ทิ้งขยะลงคลอง — ขยะคือศัตรูตัวจริงของเครื่องสูบน้ำ', 'บันทึกแอปนี้ไว้ตรวจสถานะช่วงฝนตก']
   return (
-    <div className="rounded-xl bg-white p-3 shadow-sm">
-      <h3 className="text-sm font-bold text-slate-900">💡 คำแนะนำสำหรับตอนนี้</h3>
-      <ul className="mt-2 space-y-1.5 text-sm text-slate-600">
+    <div className="glass-panel p-3">
+      <h3 className="text-sm font-bold text-hud-text">💡 คำแนะนำสำหรับตอนนี้</h3>
+      <ul className="mt-2 space-y-1.5 text-sm text-hud-text/80">
         {tips.map((t) => (
           <li key={t} className="flex gap-2">
-            <span className="text-sky-500">•</span>
+            <span className="text-hud-cyan">•</span>
             {t}
           </li>
         ))}
@@ -128,17 +128,17 @@ function SafetyTips() {
 function AboutTab() {
   const feeds = useAppStore((s) => s.feeds)
   return (
-    <div className="space-y-3 p-3 text-sm text-slate-600">
-      <div className="rounded-xl bg-white p-3 shadow-sm">
-        <h3 className="font-bold text-slate-900">เกี่ยวกับ AquaFlow</h3>
+    <div className="space-y-3 p-3 text-sm text-hud-text/80">
+      <div className="glass-panel p-3">
+        <h3 className="font-bold text-hud-text">เกี่ยวกับ AquaFlow</h3>
         <p className="mt-1 leading-6">
           ระบบสาธิตการประสานงานสถานีสูบน้ำ–ประตูระบายน้ำทั่วกรุงเทพฯ สำหรับ UTCC AI Hackathon 2026
           — "software over concrete" · คำแนะนำมาจากกฎเชิงฮิวริสติกที่โปร่งใส (ตัวแทนของโมเดล ML
           ในเวอร์ชันถัดไป) · พิกัดสถานีเป็นค่าโดยประมาณจากข้อมูลเปิด
         </p>
       </div>
-      <div className="rounded-xl bg-white p-3 shadow-sm">
-        <h3 className="font-bold text-slate-900">แหล่งข้อมูล</h3>
+      <div className="glass-panel p-3">
+        <h3 className="font-bold text-hud-text">แหล่งข้อมูล</h3>
         <ul className="mt-2 space-y-2">
           <li className="flex items-center justify-between">
             <span>🌧️ ฝน/พยากรณ์ — Open-Meteo</span>
@@ -157,7 +157,7 @@ function AboutTab() {
             <LiveBadge feed={feeds.stations} />
           </li>
         </ul>
-        <p className="mt-2 text-xs text-slate-400">
+        <p className="mt-2 text-xs text-hud-dim">
           สด = ดึงจาก API จริง · แคช = สแนปช็อตสำรองในเครื่อง · จำลอง = แบบจำลองคณิตศาสตร์ ·
           อ้างอิงเพิ่มเติม: กรมอุตุนิยมวิทยา · สำนักการระบายน้ำ กทม.
         </p>
