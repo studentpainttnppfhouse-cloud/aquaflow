@@ -16,15 +16,15 @@ export default function StatStrip() {
     { icon: '🌧️', label: 'ฝนคาดการณ์ 3 ชม.', value: `${rain3h.toFixed(1)} มม.`, hot: rain3h > 10 },
   ]
   return (
-    <div className="grid grid-cols-2 gap-2 border-b border-hud-edge bg-hud-bg px-2 py-2 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-2 border-b border-hud-edge bg-black/10 px-2 py-2 sm:grid-cols-4">
       {items.map((it) => (
         <div key={it.label} className="flex items-center gap-2.5 rounded-lg border border-hud-edge bg-hud-panel px-3 py-1.5">
           <span className="text-lg">{it.icon}</span>
           <div>
-            <div className={`text-base font-extrabold leading-5 tabular-nums ${it.hot ? 'text-hud-cyan' : 'text-white'}`}>
+            <div className={`data-value text-base font-extrabold leading-5 ${it.hot ? 'text-hud-cyan' : 'text-hud-text'}`}>
               {it.value}
             </div>
-            <div className="text-[10px] text-hud-dim">{it.label}</div>
+            <div className="label-tech">{it.label}</div>
           </div>
         </div>
       ))}

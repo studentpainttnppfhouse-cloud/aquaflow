@@ -54,7 +54,7 @@ export default function Guide({ audience }: { audience: 'control' | 'citizen' })
           {steps.map((_, i) => (
             <span
               key={i}
-              className={`h-1.5 rounded-full transition-all ${i === step ? 'w-6 bg-hud-cyan' : 'w-1.5 bg-hud-edge'}`}
+              className={`h-1.5 rounded-full transition-all ${i === step ? 'w-6 bg-hud-cyan' : 'w-1.5 bg-hud-track'}`}
             />
           ))}
         </div>

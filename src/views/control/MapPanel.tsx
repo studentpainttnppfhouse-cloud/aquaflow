@@ -22,10 +22,14 @@ function stationIcon(s: StationState): L.DivIcon {
   })
 }
 
-export default function MapPanel() {
+export const BANGKOK_CENTER: [number, number] = [13.765, 100.575]
+export const BANGKOK_ZOOM = 11
+
+export default function MapPanel({ mapRef }: { mapRef?: React.RefObject<L.Map> }) {
   const stations = useAppStore((s) => s.stations)
   const canals = useAppStore((s) => s.canals)
   const commandStation = useAppStore((s) => s.commandStation)
+  const selectStation = useAppStore((s) => s.selectStation)
 
   // A canal "flows" (animated dash toward the river) while any station on it pumps.
   const flowingCanals = useMemo(
@@ -35,8 +39,9 @@ export default function MapPanel() {
 
   return (
     <MapContainer
-      center={[13.765, 100.575]}
-      zoom={11}
+      ref={mapRef}
+      center={BANGKOK_CENTER}
+      zoom={BANGKOK_ZOOM}
       zoomSnap={0.5}
       className="h-full w-full"
       preferCanvas={false}
@@ -52,9 +57,9 @@ export default function MapPanel() {
             positions={c.path}
             className={flowing ? 'canal-flowing' : undefined}
             pathOptions={{
-              color: flowing ? '#22d3ee' : c.kind === 'river' ? '#2f6fb4' : '#2c8bb8',
+              color: flowing ? '#2DE0C8' : c.kind === 'river' ? '#2a4d6e' : '#254564',
               weight: c.kind === 'river' ? 5 : 3,
-              opacity: flowing ? 0.95 : 0.55,
+              opacity: flowing ? 0.95 : 0.6,
             }}
           >
             <Popup>
@@ -69,27 +74,32 @@ export default function MapPanel() {
       })}
 
       {stations.map((s) => (
-        <Marker key={`${s.id}-${s.status}`} position={[s.lat, s.lng]} icon={stationIcon(s)}>
+        <Marker
+          key={`${s.id}-${s.status}`}
+          position={[s.lat, s.lng]}
+          icon={stationIcon(s)}
+          eventHandlers={{ click: () => selectStation(s.id) }}
+        >
           <Popup>
-            <div className="min-w-[220px]">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-hud-dim">
+            <div className="min-w-[220px] font-thai">
+              <div className="label-tech">
                 {TYPE_LABEL[s.type]} · เขต{s.district}
               </div>
-              <div className="mt-0.5 font-bold">{s.name}</div>
-              <div className="mt-1 text-xs opacity-85">
+              <div className="mt-0.5 font-bold text-hud-text">{s.name}</div>
+              <div className="mt-1 text-xs text-hud-text/85">
                 {s.canal} · กำลังระบาย {s.capacity_cms} ลบ.ม./วินาที
-                {s.approx && <span className="opacity-60"> · พิกัดโดยประมาณ</span>}
+                {s.approx && <span className="text-hud-dim"> · พิกัดโดยประมาณ</span>}
               </div>
               <div className="mt-2 flex items-center gap-2 text-xs">
-                <span>ระดับน้ำ</span>
+                <span className="text-hud-dim">ระดับน้ำ</span>
                 <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/10">
                   <div
-                    className={`h-full rounded-full ${s.level > 85 ? 'bg-hud-red' : s.level > 65 ? 'bg-hud-amber' : s.pumping ? 'bg-hud-cyan' : 'bg-hud-green'}`}
+                    className={`h-full rounded-full ${s.level > 85 ? 'bg-hud-coral' : s.level > 65 ? 'bg-hud-amber' : s.pumping ? 'bg-hud-cyan' : 'bg-hud-green'}`}
                     style={{ width: `${Math.min(100, s.level)}%` }}
                   />
                 </div>
-                <b className="tabular-nums">{s.level.toFixed(0)}%</b>
-                <span className={s.trend > 0.5 ? 'text-hud-red' : s.trend < -0.5 ? 'text-hud-cyan' : 'text-hud-dim'}>
+                <b className="data-value text-hud-text">{s.level.toFixed(0)}%</b>
+                <span className={s.trend > 0.5 ? 'text-hud-coral' : s.trend < -0.5 ? 'text-hud-cyan' : 'text-hud-dim'}>
                   {s.trend > 0.5 ? '▲' : s.trend < -0.5 ? '▼' : '—'}
                 </span>
               </div>

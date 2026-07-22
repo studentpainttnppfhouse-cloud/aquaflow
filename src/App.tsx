@@ -29,10 +29,10 @@ export default function App() {
 
 function Booting() {
   return (
-    <div className="grid h-full place-items-center text-hud-dim">
+    <div className="grid h-full place-items-center bg-gradient-to-b from-hud-bg to-hud-bg2 text-hud-dim">
       <div className="text-center">
         <div className="animate-pulse text-3xl">🌊</div>
-        <p className="mt-2 text-sm">กำลังเชื่อมต่อแหล่งข้อมูล…</p>
+        <p className="label-tech mt-3">กำลังเชื่อมต่อแหล่งข้อมูล…</p>
       </div>
     </div>
   )
