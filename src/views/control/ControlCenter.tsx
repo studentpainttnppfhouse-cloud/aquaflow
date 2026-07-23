@@ -1,43 +1,95 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type L from 'leaflet'
 import { useAppStore } from '../../store/useAppStore'
 import LiveBadge from '../../components/LiveBadge'
 import MapPanel from './MapPanel'
 import Narration from './Narration'
 import RecommendationPanel from './RecommendationPanel'
-import RiskGauge from './RiskGauge'
+import AreaPanel from './AreaPanel'
+import NotificationPanel from './NotificationPanel'
+import StationPlannerDrawer from './StationPlannerDrawer'
+import GaugeCluster from './GaugeCluster'
 import StatStrip from './StatStrip'
+import Footer from './Footer'
 import BroadcastPanel from './BroadcastPanel'
-import { ActivityLog, RainRadar, StationBars, TideSpark } from './SidePanels'
+import { ActivityLog, RainRadar, StationBars } from './SidePanels'
 import { fmtClock } from '../../lib/util'
 
 export default function ControlCenter() {
+  const mapRef = useRef<L.Map>(null)
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <OpsBar />
+    <div className="flex h-full min-h-0 flex-col bg-gradient-to-b from-hud-bg to-hud-bg2">
+      <TopStatusBar />
+      <ConditionsBar />
       <Narration />
       <StatStrip />
-      <div className="flex min-h-0 flex-1 flex-col gap-2 p-2 lg:flex-row">
-        <section className="order-2 flex min-h-0 w-full flex-col gap-2 lg:order-1 lg:w-[21rem]">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 lg:flex-row lg:overflow-hidden">
+        {/* Left rail — brief plan + areas (sort & per-area approval) */}
+        <section className="order-2 flex min-h-0 w-full flex-col gap-2 lg:order-1 lg:w-[21rem] lg:overflow-hidden">
           <RecommendationPanel />
+          <AreaPanel />
           <ActivityLog />
         </section>
-        <section className="order-1 min-h-[45vh] flex-1 overflow-hidden rounded-xl border border-hud-edge lg:order-2 lg:min-h-0">
-          <MapPanel />
+
+        {/* Center — map with glowing river + floating station detail */}
+        <section className="glass-panel order-1 min-h-[45vh] flex-1 overflow-hidden lg:order-2 lg:min-h-0">
+          <MapPanel mapRef={mapRef} />
         </section>
-        <section className="order-3 flex w-full flex-col gap-2 overflow-y-auto panel-scroll lg:w-[19rem]">
-          <RiskGauge />
+
+        {/* Right rail — notifications/approvals, multi-channel alerting, radar, water level (collapsible) */}
+        <section className="order-3 flex min-h-0 w-full flex-col gap-2 lg:w-[20rem] lg:overflow-y-auto lg:panel-scroll">
+          <NotificationPanel />
           <BroadcastPanel />
-          <TideSpark />
           <RainRadar />
           <StationBars />
         </section>
       </div>
+      <div className="shrink-0 px-2 pb-2">
+        <GaugeCluster />
+      </div>
+      <Footer mapRef={mapRef} />
+      <StationPlannerDrawer />
     </div>
   )
 }
 
-function OpsBar() {
+function TopStatusBar() {
   const [now, setNow] = useState(new Date())
+  const feeds = useAppStore((s) => s.feeds)
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  const anyLive = Object.values(feeds).some((f) => f === 'live')
+
+  return (
+    <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-hud-edge bg-hud-panelSolid/90 px-4 py-2.5 pr-24 backdrop-blur sm:pr-56">
+      <h1 className="flex w-full items-center gap-2 text-lg font-extrabold tracking-tight text-hud-text sm:w-auto">
+        🌊 Aqua<span className="text-hud-cyan">Flow</span>
+        <span className="label-tech hidden sm:inline">Control Center · กทม.</span>
+      </h1>
+
+      <span className="status-pill">
+        <span className={`h-1.5 w-1.5 rounded-full ${anyLive ? 'bg-hud-cyan status-dot-live' : 'bg-hud-amber'}`} aria-hidden />
+        <span className="label-tech-lit !text-[10px]">{anyLive ? 'SYSTEM ONLINE' : 'CACHED MODE'}</span>
+      </span>
+
+      <span className="data-value text-sm text-hud-cyan">{fmtClock(now)}</span>
+
+      <div className="ml-auto flex items-center gap-1.5 rounded-full border border-hud-edge bg-black/20 py-1 pl-1 pr-2.5">
+        <span className="grid h-5 w-5 place-items-center rounded-full bg-hud-cyan/20 text-[10px] font-bold text-hud-cyan">
+          O
+        </span>
+        <span className="label-tech !text-hud-text">เจ้าหน้าที่ควบคุม</span>
+      </div>
+    </header>
+  )
+}
+
+function ConditionsBar() {
   const { rain, tide, storm, mode, feeds } = useAppStore((s) => ({
     rain: s.rain,
     tide: s.tide,
@@ -48,9 +100,10 @@ function OpsBar() {
   const setMode = useAppStore((s) => s.setMode)
   const simulateStorm = useAppStore((s) => s.simulateStorm)
   const reset = useAppStore((s) => s.reset)
+  const [now, setNow] = useState(new Date())
 
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000)
+    const t = setInterval(() => setNow(new Date()), 30_000)
     return () => clearInterval(t)
   }, [])
 
@@ -59,21 +112,19 @@ function OpsBar() {
   const nowProb = storm ? 95 : hourIdx >= 0 ? rain.hours[hourIdx].probability : 0
 
   return (
-    <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-hud-edge bg-hud-panel/80 px-4 py-2 pr-56 backdrop-blur">
-      <h1 className="text-lg font-extrabold tracking-tight text-white">
-        🌊 Aqua<span className="text-hud-cyan">Flow</span>
-        <span className="ml-2 align-middle text-[10px] font-semibold uppercase tracking-widest text-hud-dim">
-          Control Center · กทม.
+    <div className="flex flex-wrap items-center gap-2 border-b border-hud-edge bg-black/10 px-3 py-1.5">
+      <span className="status-pill">
+        {storm ? '⛈️' : nowRain > 0.5 ? '🌧️' : '⛅'}
+        <span>
+          ฝนตอนนี้ <span className="data-value">{nowRain.toFixed(1)}</span> มม. · โอกาส <span className="data-value">{nowProb}</span>%
         </span>
-      </h1>
-      <span className="font-mono text-sm tabular-nums text-hud-cyan">{fmtClock(now)}</span>
-
-      <span className="flex items-center gap-1.5 rounded-full border border-hud-edge bg-black/25 px-2.5 py-1 text-xs">
-        {storm ? '⛈️' : nowRain > 0.5 ? '🌧️' : '⛅'} ฝนตอนนี้ {nowRain.toFixed(1)} มม. · โอกาส {nowProb}%
         <LiveBadge feed={feeds.rain} title="Open-Meteo" />
       </span>
-      <span className="flex items-center gap-1.5 rounded-full border border-hud-edge bg-black/25 px-2.5 py-1 text-xs">
-        🌊 น้ำทะเล {tide.height.toFixed(2)} ม. {tide.phase === 'rising' ? '▲ ขึ้น' : '▼ ลง'}
+      <span className="status-pill">
+        🌊
+        <span>
+          น้ำทะเล <span className="data-value">{tide.height.toFixed(2)}</span> ม. {tide.phase === 'rising' ? '▲ ขึ้น' : '▼ ลง'}
+        </span>
         <LiveBadge feed={tide.source} title="ระดับน้ำทะเลอ่าวไทย" />
       </span>
 
@@ -81,31 +132,38 @@ function OpsBar() {
         <div className="flex rounded-full border border-hud-edge bg-black/25 p-0.5 text-xs" role="group" aria-label="โหมดการทำงาน">
           <button
             onClick={() => setMode('confirm')}
-            className={`rounded-full px-2.5 py-1 font-semibold ${mode === 'confirm' ? 'bg-hud-cyan text-slate-900' : 'text-hud-dim hover:text-hud-text'}`}
+            className={`rounded-full px-2.5 py-1 font-semibold transition ${mode === 'confirm' ? 'bg-hud-cyan text-slate-900' : 'text-hud-dim hover:text-hud-text'}`}
           >
             แนะนำ–ยืนยัน
           </button>
           <button
             onClick={() => setMode('semi')}
-            className={`rounded-full px-2.5 py-1 font-semibold ${mode === 'semi' ? 'bg-hud-cyan text-slate-900' : 'text-hud-dim hover:text-hud-text'}`}
+            className={`rounded-full px-2.5 py-1 font-semibold transition ${mode === 'semi' ? 'bg-hud-cyan text-slate-900' : 'text-hud-dim hover:text-hud-text'}`}
           >
             กึ่งอัตโนมัติ
+          </button>
+          <button
+            onClick={() => setMode('auto')}
+            className={`rounded-full px-2.5 py-1 font-semibold transition ${mode === 'auto' ? 'bg-hud-green text-slate-900' : 'text-hud-dim hover:text-hud-text'}`}
+            title="ระบบปรับสมดุลและระบายน้ำเองเพื่อคุมความเสี่ยง"
+          >
+            ⚡ อัตโนมัติ
           </button>
         </div>
         <button
           onClick={simulateStorm}
           disabled={storm}
-          className="rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-1 text-xs font-bold text-amber-300 transition hover:bg-amber-400/25 disabled:opacity-40"
+          className="rounded-full border border-hud-coral/40 bg-hud-coral/10 px-3 py-1 text-xs font-bold text-hud-coral transition hover:bg-hud-coral/25 disabled:opacity-40"
         >
           ⛈️ จำลองพายุฝน
         </button>
         <button
           onClick={reset}
-          className="rounded-full border border-hud-edge px-3 py-1 text-xs font-bold text-hud-dim hover:text-hud-text"
+          className="rounded-full border border-hud-edge px-3 py-1 text-xs font-bold text-hud-dim transition hover:text-hud-text"
         >
           ↺ รีเซ็ต
         </button>
       </div>
-    </header>
+    </div>
   )
 }

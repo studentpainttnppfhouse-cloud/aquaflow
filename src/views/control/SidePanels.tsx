@@ -1,22 +1,22 @@
 import { useAppStore } from '../../store/useAppStore'
 import LiveBadge from '../../components/LiveBadge'
+import CollapsiblePanel from '../../components/CollapsiblePanel'
 import { next3hMm } from '../../data/adapters/openMeteo'
 
 export function StationBars() {
   const stations = useAppStore((s) => s.stations)
   const sorted = [...stations].sort((a, b) => b.level - a.level)
   return (
-    <div className="rounded-xl border border-hud-edge bg-hud-panel p-3">
-      <h2 className="mb-2 text-sm font-bold text-white">📊 ระดับน้ำรายสถานี</h2>
+    <CollapsiblePanel id="station-levels" icon="📊" title="ระดับน้ำรายสถานี" defaultOpen={false}>
       <ul className="space-y-1.5">
         {sorted.map((s) => (
           <li key={s.id} className="text-xs">
             <div className="flex items-baseline justify-between gap-2">
               <span className="truncate text-hud-text/85">{s.name.replace('สถานีสูบน้ำ', 'สน.').replace('ประตูระบายน้ำ', 'ปตร.')}</span>
-              <span className="shrink-0 tabular-nums text-hud-dim">
+              <span className="data-value shrink-0 text-hud-dim">
                 {s.pumping ? '💧 ' : ''}
                 {s.level.toFixed(0)}%
-                <span className={s.trend > 0.5 ? 'text-hud-red' : s.trend < -0.5 ? 'text-hud-cyan' : ''}>
+                <span className={s.trend > 0.5 ? 'text-hud-coral' : s.trend < -0.5 ? 'text-hud-cyan' : ''}>
                   {s.trend > 0.5 ? ' ▲' : s.trend < -0.5 ? ' ▼' : ''}
                 </span>
               </span>
@@ -24,7 +24,7 @@ export function StationBars() {
             <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-white/10">
               <div
                 className={`h-full rounded-full ${
-                  s.pumping ? 'bg-hud-cyan' : s.level > 85 ? 'bg-hud-red' : s.level > 65 ? 'bg-hud-amber' : 'bg-hud-green'
+                  s.pumping ? 'bg-hud-cyan' : s.level > 85 ? 'bg-hud-coral' : s.level > 65 ? 'bg-hud-amber' : 'bg-hud-green'
                 }`}
                 style={{ width: `${Math.min(100, s.level)}%` }}
               />
@@ -32,7 +32,7 @@ export function StationBars() {
           </li>
         ))}
       </ul>
-    </div>
+    </CollapsiblePanel>
   )
 }
 
@@ -48,12 +48,14 @@ export function RainRadar() {
   const intensity = Math.min(1, mm3h / 25)
 
   return (
-    <div className="rounded-xl border border-hud-edge bg-hud-panel p-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold text-white">🌧️ เรดาร์ฝน (จากพยากรณ์)</h2>
-        <LiveBadge feed={feeds.rain} title="Open-Meteo" />
-      </div>
-      <div className="relative mx-auto mt-2 aspect-square w-28 overflow-hidden rounded-full border border-hud-edge bg-[#07131f]">
+    <CollapsiblePanel
+      id="rainfall-radar"
+      icon="🌧️"
+      title="เรดาร์ฝน (จากพยากรณ์)"
+      defaultOpen={false}
+      actions={<LiveBadge feed={feeds.rain} title="Open-Meteo" />}
+    >
+      <div className="relative mx-auto mt-1 aspect-square w-28 overflow-hidden rounded-full border border-hud-edge bg-black/30">
         <div className="radar-sweep" />
         {[0, 1, 2].map((i) => (
           <div
@@ -64,14 +66,14 @@ export function RainRadar() {
               height: 24 + intensity * 40 + i * 6,
               left: `${18 + i * 22}%`,
               top: `${20 + ((i * 27) % 40)}%`,
-              background: `rgba(34,211,238,${0.12 + intensity * 0.4})`,
+              background: `rgba(45,224,200,${0.12 + intensity * 0.4})`,
               animationDelay: `${i * 1.3}s`,
             }}
           />
         ))}
         <div className="absolute inset-0 grid place-items-center text-center">
           <div>
-            <div className="text-lg font-extrabold text-hud-cyan tabular-nums">{mm3h.toFixed(0)}</div>
+            <div className="data-value text-lg font-extrabold text-hud-cyan">{mm3h.toFixed(0)}</div>
             <div className="text-[9px] text-hud-dim">มม. / 3 ชม.</div>
           </div>
         </div>
@@ -90,7 +92,7 @@ export function RainRadar() {
         <span>ตอนนี้</span>
         <span>+12 ชม.</span>
       </div>
-    </div>
+    </CollapsiblePanel>
   )
 }
 
@@ -105,19 +107,19 @@ export function TideSpark() {
   const path = win.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.h).toFixed(1)}`).join(' ')
   const nowPt = win.reduce((best, p) => (Math.abs(p.t - now) < Math.abs(best.t - now) ? p : best), win[0])
   return (
-    <div className="rounded-xl border border-hud-edge bg-hud-panel p-3">
+    <div>
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold text-white">🌊 น้ำขึ้น–ลง เจ้าพระยา</h2>
+        <h3 className="label-tech-lit">น้ำขึ้น–ลง เจ้าพระยา</h3>
         <LiveBadge feed={tide.source} title={tide.source === 'modeled' ? 'แบบจำลองฮาร์มอนิก (ติดป้ายชัดเจน)' : 'Open-Meteo Marine / WorldTides'} />
       </div>
-      <svg viewBox="0 0 240 60" className="mt-1 w-full">
-        <path d={path} fill="none" stroke="#38bdf8" strokeWidth="2" />
-        <circle cx={x(nowPt.t)} cy={y(nowPt.h)} r="3.5" fill="#22d3ee" />
-        <line x1={x(nowPt.t)} y1="0" x2={x(nowPt.t)} y2="60" stroke="#22d3ee" strokeWidth="0.5" strokeDasharray="2 3" />
+      <svg viewBox="0 0 240 60" preserveAspectRatio="none" className="mt-1.5 h-20 w-full sm:h-24">
+        <path d={path} fill="none" stroke="#2DE0C8" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+        <circle cx={x(nowPt.t)} cy={y(nowPt.h)} r="3.5" fill="#2DE0C8" />
+        <line x1={x(nowPt.t)} y1="0" x2={x(nowPt.t)} y2="60" stroke="#2DE0C8" strokeWidth="0.5" strokeDasharray="2 3" />
       </svg>
       <div className="flex justify-between text-[10px] text-hud-dim">
         <span>-6 ชม.</span>
-        <span className="font-bold text-hud-cyan">
+        <span className="data-value font-bold text-hud-cyan">
           ตอนนี้ {tide.height.toFixed(2)} ม. {tide.phase === 'rising' ? '▲' : '▼'}
         </span>
         <span>+18 ชม.</span>
@@ -130,17 +132,16 @@ export function ActivityLog() {
   const activityLog = useAppStore((s) => s.activityLog)
   const kindCls = { action: 'text-hud-cyan', system: 'text-hud-dim', alert: 'text-hud-amber' } as const
   return (
-    <div className="flex min-h-[10rem] flex-col rounded-xl border border-hud-edge bg-hud-panel lg:max-h-[16rem]">
-      <h2 className="border-b border-hud-edge px-3 py-2 text-sm font-bold text-white">📜 บันทึกการปฏิบัติการ</h2>
-      <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2 text-xs panel-scroll">
+    <CollapsiblePanel id="activity-log" icon="📜" title="บันทึกการปฏิบัติการ" defaultOpen mobileDefaultOpen={false} className="lg:max-h-[16rem]">
+      <ul className="max-h-48 space-y-1 overflow-y-auto text-xs panel-scroll">
         {activityLog.length === 0 && <li className="p-2 text-hud-dim">ยังไม่มีเหตุการณ์</li>}
         {activityLog.map((e) => (
           <li key={e.id} className="flex gap-2">
-            <span className="shrink-0 font-mono text-hud-dim">{e.time}</span>
+            <span className="data-value shrink-0 text-hud-dim">{e.time}</span>
             <span className={kindCls[e.kind]}>{e.text}</span>
           </li>
         ))}
       </ul>
-    </div>
+    </CollapsiblePanel>
   )
 }

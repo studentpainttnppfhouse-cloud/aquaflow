@@ -95,6 +95,52 @@ export interface LogEntry {
   kind: 'action' | 'system' | 'alert'
 }
 
+/** Whether an area's plan is being run automatically. */
+export type Activation = 'idle' | 'pending' | 'active'
+
+/** Aggregated state for one district ("area"), recomputed each simulation tick. */
+export interface AreaState {
+  district: string
+  stationIds: string[]
+  count: number
+  avgLevel: number
+  maxLevel: number
+  atRisk: number
+  pumping: number
+  /** 0–100 composite flood risk for the area. */
+  risk: number
+  /** How many stations the current plan would act on right now. */
+  actionable: number
+  /** Projected worst-case level in ~3 h from the rain forecast. */
+  projected: number
+  activation: Activation
+}
+
+export type NotiKind = 'approval' | 'flood' | 'info' | 'success'
+
+/** Side-rail notification — an approval request, a flood-soon warning, or a system note. */
+export interface Notification {
+  id: string
+  kind: NotiKind
+  title: string
+  body: string
+  time: string
+  district?: string
+  /** Stations the pre-contemplated plan will act on if approved. */
+  stationIds?: string[]
+  /** Estimated city-risk reduction (pp) if this plan runs. */
+  riskReduction?: number
+}
+
+/** Per-station answer to "is it OK to discharge more water downstream right now?" */
+export interface DischargeVerdict {
+  ok: boolean
+  /** 0–100 remaining capacity of the downstream node/river to accept water. */
+  headroom: number
+  reason: string
+  tone: 'green' | 'amber' | 'coral'
+}
+
 // ─── Multi-channel alerting ──────────────────────────────────────────────────
 // The "reach every phone" layer: one broadcast fans out to SMS, cell broadcast,
 // LINE and an automated voice call so an alert lands on a basic feature phone

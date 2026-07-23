@@ -11,7 +11,28 @@ body,
 }
 
 body {
-  @apply bg-hud-bg font-thai text-hud-text antialiased;
+  @apply font-thai text-hud-text antialiased;
+  background: linear-gradient(180deg, #0a0e14 0%, #10151f 100%) fixed;
+}
+
+/* ── reusable command-center chrome ─────────────────────────────────────── */
+.glass-panel {
+  @apply rounded-xl border border-hud-edge bg-hud-panel backdrop-blur-md;
+}
+.label-tech {
+  @apply font-sans text-[10px] font-semibold uppercase tracking-[0.14em] text-hud-dim;
+}
+.label-tech-lit {
+  @apply font-sans text-[10px] font-semibold uppercase tracking-[0.14em] text-hud-text;
+}
+.data-value {
+  @apply font-mono tabular-nums;
+}
+.status-pill {
+  @apply inline-flex items-center gap-1.5 rounded-full border border-hud-edge bg-black/20 px-2.5 py-1 text-xs text-hud-text/90;
+}
+.hairline {
+  @apply border-hud-edge;
 }
 
 /* ── scrollbars (dark panels) ─────────────────────────────────────────── */
@@ -19,7 +40,28 @@ body {
   width: 6px;
 }
 .panel-scroll::-webkit-scrollbar-thumb {
-  @apply rounded bg-hud-edge;
+  background: #24334a;
+  border-radius: 9999px;
+}
+.panel-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #24334a transparent;
+}
+
+/* ── collapsible panel body: grid-rows 0fr/1fr trick so it composes with
+   internal flex-1 scroll areas, instead of animating max-height ─────────── */
+.collapse-track {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 320ms cubic-bezier(0.16, 1, 0.3, 1);
+  min-height: 0;
+}
+.collapse-track[data-open='true'] {
+  grid-template-rows: 1fr;
+}
+.collapse-inner {
+  overflow: hidden;
+  min-height: 0;
 }
 
 /* ── map station markers ──────────────────────────────────────────────── */
@@ -27,14 +69,20 @@ body {
   position: relative;
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 20px;
+  height: 20px;
   border-radius: 9999px;
   color: #04121f;
   font-weight: 800;
-  font-size: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.85);
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.6);
+  font-size: 10px;
+  font-family: 'Inter', system-ui, sans-serif;
+  border: 1.5px solid rgba(232, 237, 242, 0.85);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
+}
+.stn-marker.stn-selected {
+  outline: 2px solid #2de0c8;
+  outline-offset: 2px;
+  z-index: 500;
 }
 .stn-ok {
   background: #34d399;
@@ -43,10 +91,12 @@ body {
   background: #fbbf24;
 }
 .stn-risk {
-  background: #f87171;
+  background: #ff6b4a;
+  box-shadow: 0 0 14px rgba(255, 107, 74, 0.7);
 }
 .stn-pumping {
-  background: #22d3ee;
+  background: #2de0c8;
+  box-shadow: 0 0 14px rgba(45, 224, 200, 0.7);
 }
 .stn-marker::after {
   content: '';
@@ -62,10 +112,10 @@ body {
   animation: stn-pulse 1.6s ease-out infinite;
 }
 .stn-risk::after {
-  border-color: #f87171;
+  border-color: #ff6b4a;
 }
 .stn-pumping::after {
-  border-color: #22d3ee;
+  border-color: #2de0c8;
 }
 @keyframes stn-pulse {
   0% {
@@ -81,6 +131,7 @@ body {
 /* ── canal flow animation (dash marches toward the river on pumping canals) ── */
 .canal-flowing {
   stroke-dasharray: 6 10;
+  filter: drop-shadow(0 0 4px rgba(45, 224, 200, 0.8));
   animation: canal-flow 1.2s linear infinite;
 }
 @keyframes canal-flow {
@@ -89,26 +140,78 @@ body {
   }
 }
 
+/* ── Chao Phraya: glowing main line the city's water flows into ─────────── */
+.river-glow {
+  filter: drop-shadow(0 0 3px rgba(56, 189, 248, 0.9)) drop-shadow(0 0 9px rgba(56, 189, 248, 0.55));
+}
+.river-flow {
+  stroke-dasharray: 2 14;
+  animation: river-flow 2.6s linear infinite;
+}
+@keyframes river-flow {
+  to {
+    stroke-dashoffset: -64;
+  }
+}
+
+/* ── floating station detail card over the map ───────────────────────────── */
+.float-card {
+  animation: float-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes float-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+
+/* ── notification enter ──────────────────────────────────────────────────── */
+.noti-enter {
+  animation: noti-in 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes noti-in {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+}
+.noti-approval {
+  box-shadow: 0 0 0 1px rgba(45, 224, 200, 0.35), 0 0 18px rgba(45, 224, 200, 0.12);
+}
+.noti-flood {
+  box-shadow: 0 0 0 1px rgba(255, 107, 74, 0.4), 0 0 18px rgba(255, 107, 74, 0.14);
+}
+
 /* leaflet dark-theme popup */
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
-  @apply bg-hud-panel text-hud-text;
+  background: #141b26;
+  color: #e8edf2;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(45, 224, 200, 0.16);
 }
 .leaflet-popup-content {
   margin: 12px 14px;
 }
 .leaflet-container {
   font-family: inherit;
-  background: #060d17;
+  background: #0a0e14;
+}
+.leaflet-control-attribution {
+  background: rgba(10, 14, 20, 0.6) !important;
+  color: #7c8b9c !important;
+}
+.leaflet-control-attribution a {
+  color: #7c8b9c !important;
 }
 .citizen-map .leaflet-popup-content-wrapper,
 .citizen-map .leaflet-popup-tip {
-  background: #ffffff;
-  color: #1f2937;
+  background: #141b26;
+  color: #e8edf2;
+  border: 1px solid rgba(45, 224, 200, 0.16);
 }
 .citizen-map .leaflet-container {
-  background: #dbeafe;
+  background: #0a0e14;
 }
 
 /* ── narration strip shimmer ─────────────────────────────────────────── */
@@ -141,7 +244,7 @@ body {
   position: absolute;
   inset: 0;
   border-radius: 9999px;
-  background: conic-gradient(from 0deg, rgba(34, 211, 238, 0.35), transparent 24%);
+  background: conic-gradient(from 0deg, rgba(45, 224, 200, 0.35), transparent 24%);
   animation: sweep 3.4s linear infinite;
 }
 @keyframes sweep {
@@ -155,11 +258,25 @@ body {
   width: min(400px, 96vw);
   height: min(820px, 94vh);
   border-radius: 2.4rem;
-  border: 10px solid #0f172a;
+  border: 10px solid #141b26;
   box-shadow:
-    0 0 0 2px #1e293b,
+    0 0 0 2px rgba(45, 224, 200, 0.2),
     0 30px 70px rgba(0, 0, 0, 0.6);
   overflow: hidden;
+}
+
+/* ── live pill dot ───────────────────────────────────────────────────── */
+@keyframes status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+.status-dot-live {
+  animation: status-pulse 1.8s ease-in-out infinite;
 }
 
 /* ── accessibility: large-text mode for elderly / low-vision residents ── */
@@ -183,8 +300,13 @@ body {
   .stn-risk::after,
   .stn-pumping::after,
   .canal-flowing,
+  .river-flow,
   .radar-blob,
-  .radar-sweep {
+  .radar-sweep,
+  .status-dot-live {
     animation: none !important;
+  }
+  .collapse-track {
+    transition: none;
   }
 }

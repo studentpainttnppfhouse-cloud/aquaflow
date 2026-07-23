@@ -15,25 +15,25 @@ export default function CanalList() {
   const localGauges = gauges.filter((g) => g.district === district).slice(0, 2)
 
   return (
-    <div className="rounded-xl bg-white p-3 shadow-sm">
+    <div className="glass-panel p-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold text-slate-900">🚰 คลองและสถานีใกล้คุณ</h3>
+        <h3 className="text-sm font-bold text-hud-text">🚰 คลองและสถานีใกล้คุณ</h3>
         <LiveBadge feed={feeds.water} title="ThaiWater / สสน." />
       </div>
       <ul className="mt-2 space-y-2">
         {local.map((s) => (
           <li key={s.id} className="text-xs">
             <div className="flex justify-between gap-2">
-              <span className="truncate font-semibold text-slate-700">{s.canal}</span>
-              <span className="shrink-0 tabular-nums text-slate-500">
-                {s.pumping && <span className="text-sky-500">💧 กำลังระบาย · </span>}
+              <span className="truncate font-semibold text-hud-text/85">{s.canal}</span>
+              <span className="data-value shrink-0 text-hud-dim">
+                {s.pumping && <span className="text-hud-cyan">💧 กำลังระบาย · </span>}
                 {s.level.toFixed(0)}%
               </span>
             </div>
-            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/10">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${
-                  s.pumping ? 'bg-sky-400' : s.level > 85 ? 'bg-rose-500' : s.level > 65 ? 'bg-amber-400' : 'bg-emerald-400'
+                  s.pumping ? 'bg-hud-cyan' : s.level > 85 ? 'bg-hud-coral' : s.level > 65 ? 'bg-hud-amber' : 'bg-hud-green'
                 }`}
                 style={{ width: `${Math.min(100, s.level)}%` }}
               />
@@ -42,13 +42,13 @@ export default function CanalList() {
         ))}
       </ul>
       {localGauges.length > 0 && (
-        <div className="mt-3 border-t border-slate-100 pt-2">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">สถานีวัดระดับน้ำอย่างเป็นทางการ</div>
-          <ul className="mt-1 space-y-1 text-xs text-slate-600">
+        <div className="mt-3 border-t border-hud-edge pt-2">
+          <div className="label-tech">สถานีวัดระดับน้ำอย่างเป็นทางการ</div>
+          <ul className="mt-1 space-y-1 text-xs text-hud-text/80">
             {localGauges.map((g) => (
               <li key={g.id} className="flex justify-between">
                 <span className="truncate">{g.name}</span>
-                <span className="tabular-nums">
+                <span className="data-value">
                   {g.waterlevel_m.toFixed(2)} / ตลิ่ง {g.bank_m.toFixed(2)} ม.
                 </span>
               </li>
