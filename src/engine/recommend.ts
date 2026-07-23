@@ -64,7 +64,7 @@ export function recommend({ stations, tide }: EngineInput): Recommendation[] {
   }
 
   const recs: Recommendation[] = []
-  for (const { s, projected, score } of candidates.slice(0, 6)) {
+  for (const { s, projected, score } of candidates.slice(0, 40)) {
     const drainsToRiver = s.downstream.startsWith('CP')
     const takenBy = nodeTaken.get(s.downstream)
     const riskReduction = Math.round(clamp((s.level - 45) * 0.22 + s.capacity_cms / 18, 2, 18))
@@ -111,5 +111,5 @@ export function recommend({ stations, tide }: EngineInput): Recommendation[] {
       score,
     })
   }
-  return recs.sort((a, b) => b.score - a.score).slice(0, 5)
+  return recs.sort((a, b) => b.score - a.score).slice(0, 16)
 }

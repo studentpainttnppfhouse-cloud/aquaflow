@@ -11,9 +11,21 @@ that sees the same event in real time.
 Two perspectives, one shared live state:
 
 - **🖥️ Control Center** (government, desktop, dark HUD) — real Leaflet map of Bangkok
-  with actual pump stations / floodgates / drainage tunnels, live weather + tide chips,
-  per-station levels, a coordinated AI recommendation panel with an approve flow,
-  storm simulator, and an activity log.
+  with **~190 pump stations / floodgates / drainage tunnels across all 50 districts**,
+  a **glowing Chao Phraya main line** that the city's water discharges into from every
+  side, live weather + tide chips, and a plan that **updates itself continuously from
+  the rain radar** (no per-station clicking required).
+  - **Areas rail** — every district as a sortable card (by risk / level / stations-to-drain
+    / name); each area can be **activated with an approval gate** before its plan runs.
+  - **Notifications & approvals rail** — pre-contemplated plans and *flood-soon* warnings
+    arrive here with **Approve / Reject**; approving runs that area's drain plan automatically.
+  - **Three ops modes** — แนะนำ–ยืนยัน (approve everything) · กึ่งอัตโนมัติ · **⚡ อัตโนมัติ**
+    (a self-balancing *equalizer* that drains and levels the network on its own to keep risk low).
+  - **Click any station → a floating detail card**; open the **per-station planner drawer**
+    for in-depth real-time info and a clear **"OK to discharge more, or not"** verdict based on
+    downstream-node headroom and the Chao Phraya tide.
+  - **Richer bottom bar** — gauges + tide plus total discharge online, capacity utilisation,
+    at-risk / watch counts, active areas, 3-h rain, and river intake headroom.
 - **📱 Citizen app** (mobile, light, phone-framed) — your district's flood risk,
   nearby canal levels, a local mini-map, push-style alerts, and safety tips.
   When the operator approves a drain action, the citizen card visibly eases red → green.

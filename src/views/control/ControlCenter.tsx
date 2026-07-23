@@ -5,7 +5,9 @@ import LiveBadge from '../../components/LiveBadge'
 import MapPanel from './MapPanel'
 import Narration from './Narration'
 import RecommendationPanel from './RecommendationPanel'
-import NodeDetail from './NodeDetail'
+import AreaPanel from './AreaPanel'
+import NotificationPanel from './NotificationPanel'
+import StationPlannerDrawer from './StationPlannerDrawer'
 import GaugeCluster from './GaugeCluster'
 import StatStrip from './StatStrip'
 import Footer from './Footer'
@@ -22,21 +24,30 @@ export default function ControlCenter() {
       <Narration />
       <StatStrip />
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 lg:flex-row lg:overflow-hidden">
-        <section className="order-2 flex min-h-0 w-full flex-col gap-2 lg:order-1 lg:w-[22rem] lg:overflow-y-auto lg:panel-scroll">
+        {/* Left rail — brief plan + areas (sort & per-area approval) */}
+        <section className="order-2 flex min-h-0 w-full flex-col gap-2 lg:order-1 lg:w-[21rem] lg:overflow-hidden">
           <RecommendationPanel />
-          <NodeDetail />
+          <AreaPanel />
           <ActivityLog />
-          <RainRadar />
-          <StationBars />
         </section>
+
+        {/* Center — map with glowing river + floating station detail */}
         <section className="glass-panel order-1 min-h-[45vh] flex-1 overflow-hidden lg:order-2 lg:min-h-0">
           <MapPanel mapRef={mapRef} />
+        </section>
+
+        {/* Right rail — notifications/approvals, radar, water level (collapsible) */}
+        <section className="order-3 flex min-h-0 w-full flex-col gap-2 lg:w-[20rem] lg:overflow-y-auto lg:panel-scroll">
+          <NotificationPanel />
+          <RainRadar />
+          <StationBars />
         </section>
       </div>
       <div className="shrink-0 px-2 pb-2">
         <GaugeCluster />
       </div>
       <Footer mapRef={mapRef} />
+      <StationPlannerDrawer />
     </div>
   )
 }
@@ -128,6 +139,13 @@ function ConditionsBar() {
             className={`rounded-full px-2.5 py-1 font-semibold transition ${mode === 'semi' ? 'bg-hud-cyan text-slate-900' : 'text-hud-dim hover:text-hud-text'}`}
           >
             กึ่งอัตโนมัติ
+          </button>
+          <button
+            onClick={() => setMode('auto')}
+            className={`rounded-full px-2.5 py-1 font-semibold transition ${mode === 'auto' ? 'bg-hud-green text-slate-900' : 'text-hud-dim hover:text-hud-text'}`}
+            title="ระบบปรับสมดุลและระบายน้ำเองเพื่อคุมความเสี่ยง"
+          >
+            ⚡ อัตโนมัติ
           </button>
         </div>
         <button

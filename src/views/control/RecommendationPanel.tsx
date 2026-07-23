@@ -18,10 +18,10 @@ export default function RecommendationPanel() {
     <CollapsiblePanel
       id="ai-recommendations"
       icon="🤖"
-      title="แผนระบายน้ำจาก AI"
+      title="แผนสรุประบายน้ำ (อัปเดตตามเรดาร์)"
       defaultOpen
       mobileDefaultOpen={false}
-      fill
+      className="lg:max-h-[22rem]"
       badge={
         recommendations.length > 0 && (
           <span className="rounded-full bg-hud-cyan/15 px-1.5 py-0.5 text-[10px] font-bold text-hud-cyan">
@@ -34,7 +34,7 @@ export default function RecommendationPanel() {
           heuristic v1 · {mode === 'semi' ? 'กึ่งอัตโนมัติ' : 'รออนุมัติ'}
         </span>
       }
-      bodyClassName="space-y-2"
+      bodyClassName="space-y-2 max-h-[18rem] overflow-y-auto panel-scroll"
     >
       {recommendations.length === 0 && (
         <p className="px-2 py-6 text-center text-xs text-hud-dim">
