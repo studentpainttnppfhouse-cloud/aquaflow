@@ -2,7 +2,9 @@ import { create } from 'zustand'
 import type {
   Activation,
   AreaState,
+  Broadcast,
   Canal,
+  Channel,
   DataFeed,
   Gauge,
   LogEntry,
@@ -10,13 +12,17 @@ import type {
   RainState,
   RecAction,
   Recommendation,
+  Severity,
   StationState,
   TideState,
+  Zone,
 } from '../data/types'
 import { fetchRain, next3hMm } from '../data/adapters/openMeteo'
 import { fetchStations } from '../data/adapters/stations'
 import { fetchTide, modeledTideAt } from '../data/adapters/tide'
 import { fetchWaterLevels } from '../data/adapters/thaiWater'
+import { buildZones, zoneReach } from '../data/zones'
+import { SEVERITY_META, draftMessage, sendAlert, severityFromRisk } from '../engine/alerting'
 import { recommend } from '../engine/recommend'
 import { buildAreas, dischargeVerdict } from '../engine/risk'
 import { clamp, fmtTime, hash01, prefersReducedMotion, uid } from '../lib/util'
@@ -53,6 +59,11 @@ interface AppState {
   narration: string
   storm: boolean
   feeds: { rain: DataFeed; water: DataFeed; tide: DataFeed; stations: DataFeed }
+  zones: Record<string, Zone>
+  broadcasts: Broadcast[]
+  /** Simulated connectivity: when false, alerts are queued and flushed on reconnect. */
+  online: boolean
+  a11yLarge: boolean
   /** Station selected on the Control Center map — drives the floating detail card. */
   selectedStationId: string | null
   /** Station opened in the in-depth per-station planner drawer. */
@@ -77,6 +88,12 @@ interface AppState {
   dismissNotification: (id: string) => void
   simulateStorm: () => void
   reset: () => void
+  /** Fan an alert out to every phone in a district over all channels. */
+  broadcastAlert: (district: string, opts?: { severity?: Severity; message?: string; channels?: Channel[] }) => void
+  /** One tap: broadcast to every district currently at watch level or above. */
+  broadcastAffected: () => void
+  setOnline: (online: boolean) => void
+  setA11yLarge: (large: boolean) => void
 }
 
 function log(text: string, kind: LogEntry['kind'] = 'action'): LogEntry {
@@ -153,6 +170,39 @@ export const useAppStore = create<AppState>((set, get) => {
     const noti: Notification = { ...n, id: uid('noti'), time: fmtTime(new Date()) }
     set((s) => ({ notifications: [noti, ...s.notifications].slice(0, 24) }))
     return noti.id
+  }
+
+  // ── alerting: fan a broadcast out to every phone in a zone ────────────────
+
+  const upsertBroadcast = (b: Broadcast) =>
+    set((s) => {
+      const i = s.broadcasts.findIndex((x) => x.id === b.id)
+      if (i === -1) return { broadcasts: [b, ...s.broadcasts].slice(0, 12) }
+      const next = s.broadcasts.slice()
+      next[i] = b
+      return { broadcasts: next }
+    })
+
+  const runBroadcast = (
+    district: string,
+    severity: Severity,
+    message: string,
+    channels: Channel[] | undefined,
+    existingId?: string,
+  ) => {
+    const { zones, online } = get()
+    const zone = zones[district]
+    if (!zone) return
+    void sendAlert({
+      district,
+      severity,
+      message,
+      recipients: zone.recipients,
+      reach: zoneReach(zone),
+      channels,
+      queuedOffline: !online,
+      onUpdate: (b) => upsertBroadcast(existingId ? { ...b, id: existingId } : b),
+    })
   }
 
   // ── simulation tick: inflow from rain, drain from pumping ─────────────────
@@ -319,6 +369,10 @@ export const useAppStore = create<AppState>((set, get) => {
     narration: 'กำลังเชื่อมต่อแหล่งข้อมูล…',
     storm: false,
     feeds: { rain: 'cached', water: 'cached', tide: 'modeled', stations: 'cached' },
+    zones: {},
+    broadcasts: [],
+    online: typeof navigator !== 'undefined' ? navigator.onLine : true,
+    a11yLarge: false,
     selectedStationId: null,
     plannerStationId: null,
     areaSort: 'risk',
@@ -346,9 +400,11 @@ export const useAppStore = create<AppState>((set, get) => {
         st.status = statusOf(st)
         return st
       })
+      const districts = [...new Set(stations.map((s) => s.district))]
       set({
         ready: true,
         stations,
+        zones: buildZones(districts),
         canals: stationsRes.canals,
         gauges: waterRes.gauges,
         rain: rainRes,
@@ -376,6 +432,11 @@ export const useAppStore = create<AppState>((set, get) => {
         loopsStarted = true
         requestAnimationFrame(frame)
         setInterval(simTick, SIM_TICK_MS)
+        // Offline resilience: queued alerts are re-sent the moment we reconnect.
+        if (typeof window !== 'undefined') {
+          window.addEventListener('online', () => get().setOnline(true))
+          window.addEventListener('offline', () => get().setOnline(false))
+        }
         setInterval(async () => {
           const r = await fetchRain(get().stations)
           set((st) => ({ rain: r, feeds: { ...st.feeds, rain: r.feed } }))
@@ -533,12 +594,68 @@ export const useAppStore = create<AppState>((set, get) => {
         recommendations: [],
         notifications: [],
         activation: {},
+        broadcasts: [],
         narration: '↺ รีเซ็ตสถานการณ์แล้ว · ระบบกลับสู่การเฝ้าระวังปกติ',
         activityLog: [log('↺ รีเซ็ตสถานการณ์จำลอง', 'system'), ...s.activityLog].slice(0, 60),
       })
       refreshRecommendations()
       rebuildAreas()
     },
+
+    broadcastAlert: (district, opts) => {
+      const s = get()
+      const risk = districtRisk(s, district)
+      const severity = opts?.severity ?? severityFromRisk(risk)
+      const draining = s.stations.some((st) => st.pumping && st.district === district)
+      const message = opts?.message ?? draftMessage(severity, { district, tide: s.tide, draining })
+      const channels = opts?.channels ?? SEVERITY_META[severity].channels
+      const meta = SEVERITY_META[severity]
+      const offline = !s.online
+      set((st) => ({
+        activityLog: [
+          log(
+            `${offline ? '📶 ออฟไลน์—เข้าคิว: ' : '📣 '}กระจายเตือน${meta.icon} เขต${district} (${meta.th}) → ${channels.length} ช่องทาง`,
+            'alert',
+          ),
+          ...st.activityLog,
+        ].slice(0, 60),
+      }))
+      runBroadcast(district, severity, message, channels)
+    },
+
+    broadcastAffected: () => {
+      const s = get()
+      const districts = [...new Set(s.stations.map((st) => st.district))]
+      const affected = districts.filter((d) => severityFromRisk(districtRisk(s, d)) !== 'normal')
+      if (!affected.length) {
+        set((st) => ({
+          activityLog: [log('📣 ไม่มีเขตที่ถึงเกณฑ์แจ้งเตือน — ยังไม่กระจายข้อความ', 'system'), ...st.activityLog].slice(0, 60),
+        }))
+        return
+      }
+      affected.forEach((d) => get().broadcastAlert(d))
+    },
+
+    setOnline: (online) => {
+      const was = get().online
+      set({ online })
+      if (online && !was) {
+        // Reconnected — flush every queued alert through the real fan-out.
+        const queued = get().broadcasts.filter((b) => b.queued)
+        if (queued.length) {
+          set((st) => ({
+            activityLog: [log(`🔌 กลับมาออนไลน์ — ส่งการแจ้งเตือนที่ค้างในคิว ${queued.length} รายการ`, 'system'), ...st.activityLog].slice(0, 60),
+          }))
+          queued.forEach((b) => runBroadcast(b.district, b.severity, b.message, b.channels, b.id))
+        }
+      } else if (!online && was) {
+        set((st) => ({
+          activityLog: [log('📵 การเชื่อมต่อหลุด — การแจ้งเตือนใหม่จะถูกเก็บเข้าคิวจนกว่าจะกลับมาออนไลน์', 'system'), ...st.activityLog].slice(0, 60),
+        }))
+      }
+    },
+
+    setA11yLarge: (a11yLarge) => set({ a11yLarge }),
   }
 })
 

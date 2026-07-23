@@ -11,6 +11,7 @@ import StationPlannerDrawer from './StationPlannerDrawer'
 import GaugeCluster from './GaugeCluster'
 import StatStrip from './StatStrip'
 import Footer from './Footer'
+import BroadcastPanel from './BroadcastPanel'
 import { ActivityLog, RainRadar, StationBars } from './SidePanels'
 import { fmtClock } from '../../lib/util'
 
@@ -36,9 +37,10 @@ export default function ControlCenter() {
           <MapPanel mapRef={mapRef} />
         </section>
 
-        {/* Right rail — notifications/approvals, radar, water level (collapsible) */}
+        {/* Right rail — notifications/approvals, multi-channel alerting, radar, water level (collapsible) */}
         <section className="order-3 flex min-h-0 w-full flex-col gap-2 lg:w-[20rem] lg:overflow-y-auto lg:panel-scroll">
           <NotificationPanel />
+          <BroadcastPanel />
           <RainRadar />
           <StationBars />
         </section>
