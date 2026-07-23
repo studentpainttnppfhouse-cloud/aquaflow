@@ -17,10 +17,12 @@ import type {
   TideState,
   Zone,
 } from '../data/types'
-import { fetchRain, next3hMm } from '../data/adapters/openMeteo'
+import { next3hMm } from '../data/adapters/openMeteo'
 import { fetchStations } from '../data/adapters/stations'
-import { fetchTide, modeledTideAt } from '../data/adapters/tide'
-import { fetchWaterLevels } from '../data/adapters/thaiWater'
+import { modeledTideAt } from '../data/adapters/tide'
+import { readCanalRiverLevel, readPumpGateStatus, readRainfall, readTideLevel } from '../data/adapters/live'
+import { PROVENANCE_META, type Provenance, type Reading } from '../data/adapters/types'
+import { refreshIntervalOf } from '../data/adapters/config'
 import { buildZones, zoneReach } from '../data/zones'
 import { SEVERITY_META, draftMessage, sendAlert, severityFromRisk } from '../engine/alerting'
 import { recommend } from '../engine/recommend'
@@ -58,7 +60,9 @@ interface AppState {
   mode: OpsMode
   narration: string
   storm: boolean
-  feeds: { rain: DataFeed; water: DataFeed; tide: DataFeed; stations: DataFeed }
+  feeds: { rain: Provenance; water: Provenance; tide: Provenance; stations: DataFeed }
+  /** Track A · LIVE — the unified provenance-tagged readings, keyed by config source id. */
+  sources: Partial<Record<string, Reading<unknown>>>
   zones: Record<string, Zone>
   broadcasts: Broadcast[]
   /** Simulated connectivity: when false, alerts are queued and flushed on reconnect. */
@@ -98,6 +102,20 @@ interface AppState {
 
 function log(text: string, kind: LogEntry['kind'] = 'action'): LogEntry {
   return { id: uid('log'), time: fmtTime(new Date()), text, kind }
+}
+
+/** Surface a warning for any source that is degraded (backup/sim) or not usable for a decision. */
+function backupWarningLogs(readings: Reading<unknown>[]): LogEntry[] {
+  return readings
+    .filter((r) => r.provenance === 'backup' || r.provenance === 'sim')
+    .map((r) =>
+      log(
+        `⚠️ แหล่งข้อมูล "${r.source}" กำลังใช้ชั้น "${PROVENANCE_META[r.provenance].th}"${
+          r.usableForDecision ? '' : ' — ห้ามใช้ตัดสินใจโดยลำพัง'
+        }`,
+        'alert',
+      ),
+    )
 }
 
 function statusOf(s: StationState): StationState['status'] {
@@ -368,7 +386,8 @@ export const useAppStore = create<AppState>((set, get) => {
     mode: 'confirm',
     narration: 'กำลังเชื่อมต่อแหล่งข้อมูล…',
     storm: false,
-    feeds: { rain: 'cached', water: 'cached', tide: 'modeled', stations: 'cached' },
+    feeds: { rain: 'sim', water: 'sim', tide: 'sim', stations: 'cached' },
+    sources: {},
     zones: {},
     broadcasts: [],
     online: typeof navigator !== 'undefined' ? navigator.onLine : true,
@@ -380,11 +399,16 @@ export const useAppStore = create<AppState>((set, get) => {
     init: async () => {
       if (get().ready) return
       const stationsRes = await fetchStations()
-      const [rainRes, tideRes, waterRes] = await Promise.all([
-        fetchRain(stationsRes.stations),
-        fetchTide(),
-        fetchWaterLevels(),
+      // Track A · LIVE — every source now arrives as a provenance-tagged Reading.
+      const [rainR, tideR, waterR, pumpR] = await Promise.all([
+        readRainfall(stationsRes.stations),
+        readTideLevel(),
+        readCanalRiverLevel(),
+        readPumpGateStatus(),
       ])
+      const rainRes = rainR.value
+      const tideRes = tideR.value
+      const waterRes = waterR.value
       const stations: StationState[] = stationsRes.stations.map((s) => {
         // real gauge level when available; otherwise a stable seeded starting level
         const level = waterRes.levels[s.id] ?? 40 + hash01(s.id) * 34
@@ -412,18 +436,18 @@ export const useAppStore = create<AppState>((set, get) => {
         cityRisk: 0,
         targetRisk: computeTargetRisk(stations, next3hMm(rainRes.hours), tideRes),
         feeds: {
-          rain: rainRes.feed,
-          water: waterRes.feed,
-          tide: tideRes.source,
+          rain: rainR.provenance,
+          water: waterR.provenance,
+          tide: tideR.provenance,
           stations: stationsRes.feed,
         },
+        sources: { rainfall: rainR, tideLevel: tideR, canalRiverLevel: waterR, pumpGateStatus: pumpR },
         activityLog: [
           log(
-            `ระบบออนไลน์ · ${stations.length} สถานีทั่วกรุงเทพฯ · ฝน: ${rainRes.feed === 'live' ? 'Open-Meteo (สด)' : 'สแนปช็อต'} · น้ำ: ${
-              waterRes.feed === 'live' ? 'ThaiWater (สด)' : 'สแนปช็อต'
-            } · น้ำทะเล: ${tideRes.source === 'live' ? 'สด' : 'แบบจำลอง'}`,
+            `ระบบออนไลน์ · ${stations.length} สถานีทั่วกรุงเทพฯ · ฝน: ${PROVENANCE_META[rainR.provenance].th} · น้ำ: ${PROVENANCE_META[waterR.provenance].th} · น้ำทะเล: ${PROVENANCE_META[tideR.provenance].th} · ปั๊ม/ประตู: ${PROVENANCE_META[pumpR.provenance].th}`,
             'system',
           ),
+          ...backupWarningLogs([rainR, tideR, waterR, pumpR]),
         ],
       })
       refreshRecommendations()
@@ -438,9 +462,13 @@ export const useAppStore = create<AppState>((set, get) => {
           window.addEventListener('offline', () => get().setOnline(false))
         }
         setInterval(async () => {
-          const r = await fetchRain(get().stations)
-          set((st) => ({ rain: r, feeds: { ...st.feeds, rain: r.feed } }))
-        }, 15 * 60e3)
+          const r = await readRainfall(get().stations)
+          set((st) => ({
+            rain: r.value,
+            feeds: { ...st.feeds, rain: r.provenance },
+            sources: { ...st.sources, rainfall: r },
+          }))
+        }, refreshIntervalOf('rainfall'))
         setInterval(() => {
           const t = get().tide
           if (t.source === 'modeled') {

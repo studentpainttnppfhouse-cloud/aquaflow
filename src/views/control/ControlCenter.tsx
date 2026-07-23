@@ -125,7 +125,7 @@ function ConditionsBar() {
         <span>
           น้ำทะเล <span className="data-value">{tide.height.toFixed(2)}</span> ม. {tide.phase === 'rising' ? '▲ ขึ้น' : '▼ ลง'}
         </span>
-        <LiveBadge feed={tide.source} title="ระดับน้ำทะเลอ่าวไทย" />
+        <LiveBadge feed={feeds.tide} title="ระดับน้ำทะเลอ่าวไทย" />
       </span>
 
       <div className="ml-auto flex items-center gap-2">
