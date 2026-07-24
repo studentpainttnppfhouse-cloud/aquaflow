@@ -1,0 +1,11 @@
+{
+  "_note": "Committed fallback snapshot for pumpGateStatus. Real feed = BMA flood-control center (TODO(paint)). This is a small representative sample of station operational status; live per-station pump/gate telemetry is not publicly available, so the app's own simulation remains authoritative for the demo.",
+  "statuses": [
+    { "stationId": "phrakhanong", "name": "สถานีสูบน้ำพระโขนง", "online": true, "mode": "auto" },
+    { "stationId": "makkasan", "name": "อุโมงค์มักกะสัน", "online": true, "mode": "manual" },
+    { "stationId": "bangsue-tunnel", "name": "อุโมงค์บางซื่อ", "online": true, "mode": "auto" },
+    { "stationId": "rama9-tunnel", "name": "อุโมงค์พระราม 9", "online": true, "mode": "auto" },
+    { "stationId": "prawet-gate", "name": "ประตูระบายน้ำประเวศ", "online": true, "mode": "manual" },
+    { "stationId": "phasicharoen", "name": "สถานีสูบน้ำภาษีเจริญ", "online": false, "mode": "unknown" }
+  ]
+}

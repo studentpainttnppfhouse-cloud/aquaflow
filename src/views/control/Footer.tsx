@@ -3,11 +3,15 @@ import { createPortal } from "react-dom";
 import type L from "leaflet";
 import { useAppStore } from "../../store/useAppStore";
 import type { DataFeed } from "../../data/types";
+import type { Provenance } from "../../data/adapters/types";
 import { BANGKOK_CENTER, BANGKOK_ZOOM } from "./MapPanel";
 
-const FEED_SCORE: Record<DataFeed, number> = {
+const FEED_SCORE: Record<Provenance | DataFeed, number> = {
   live: 100,
+  cache: 68,
   cached: 68,
+  backup: 55,
+  sim: 40,
   modeled: 40,
 };
 
@@ -46,7 +50,6 @@ export default function Footer({ mapRef }: { mapRef: React.RefObject<L.Map> }) {
   const feeds = useAppStore((s) => s.feeds);
   const stations = useAppStore((s) => s.stations);
   const mode = useAppStore((s) => s.mode);
-  const setMode = useAppStore((s) => s.setMode);
   const storm = useAppStore((s) => s.storm);
   const activityLog = useAppStore((s) => s.activityLog);
   const selectStation = useAppStore((s) => s.selectStation);
@@ -83,36 +86,13 @@ export default function Footer({ mapRef }: { mapRef: React.RefObject<L.Map> }) {
       />
 
       <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
-        <div
-          role="group"
-          aria-label="โหมดการทำงาน"
-          className="flex items-center rounded-full border border-hud-edge bg-black/20 p-0.5"
-        >
-          <button
-            onClick={() => setMode("manual")}
-            aria-pressed={mode === "manual"}
-            title="ควบคุมด้วยมือ — ปั๊มทำงานเมื่อกดสั่งเท่านั้น (ซ่อมบำรุง/ทดสอบ/เซ็นเซอร์ผิดพลาด)"
-            className={`rounded-full px-3 py-1 text-xs font-bold transition ${
-              mode === "manual"
-                ? "bg-hud-amber/20 text-hud-amber"
-                : "text-hud-dim hover:text-hud-text"
-            }`}
-          >
-            🕹️ Manual
-          </button>
-          <button
-            onClick={() => setMode("heuristic")}
-            aria-pressed={mode === "heuristic"}
-            title="ฮิวริสติก (AI) — ระบบเสนอแผนประสานงาน เจ้าหน้าที่อนุมัติทุกคำสั่ง"
-            className={`rounded-full px-3 py-1 text-xs font-bold transition ${
-              mode === "heuristic"
-                ? "bg-hud-cyan/20 text-hud-cyan"
-                : "text-hud-dim hover:text-hud-text"
-            }`}
-          >
-            🤖 Heuristic
-          </button>
-        </div>
+        <span className="hidden items-center gap-1.5 rounded-full border border-hud-edge bg-black/20 px-2.5 py-1 text-xs font-bold sm:inline-flex">
+          {mode === "manual" ? (
+            <span className="text-hud-amber">🕹️ โหมดควบคุมด้วยมือ</span>
+          ) : (
+            <span className="text-hud-cyan">🤖 โหมดฮิวริสติก (AI)</span>
+          )}
+        </span>
 
         <div className="relative">
           <button

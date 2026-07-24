@@ -8,7 +8,7 @@ const ACTION_META = {
   wait: { label: 'รอ & เฝ้าระวัง', cls: 'text-hud-amber border-hud-amber/40 bg-hud-amber/10' },
 } as const
 
-/** The primary rail panel. In heuristic mode it is the AI plan; in manual mode it is a bare-hands station console. */
+/** Primary left-rail panel: the AI plan in heuristic mode, a bare-hands console in manual mode. */
 export default function RecommendationPanel() {
   const mode = useAppStore((s) => s.mode)
   return mode === 'manual' ? <ManualConsole /> : <HeuristicPlan />
@@ -16,77 +16,33 @@ export default function RecommendationPanel() {
 
 function HeuristicPlan() {
   const recommendations = useAppStore((s) => s.recommendations)
-  const stations = useAppStore((s) => s.stations)
-  const cityRisk = useAppStore((s) => s.cityRisk)
-  const storm = useAppStore((s) => s.storm)
   const approve = useAppStore((s) => s.approve)
-  const equalizeNetwork = useAppStore((s) => s.equalizeNetwork)
   const [expanded, setExpanded] = useState<string | null>(null)
-
-  const actionable = recommendations.filter((r) => r.action !== 'wait')
-  const atRisk = stations.filter((s) => s.status === 'risk').length
-  const pumping = stations.filter((s) => s.pumping).length
-  const drainable = stations.filter((s) => !s.pumping && s.level > 45).length
-
-  // One honest situation sentence — replaces the separate "notification" surface.
-  const summary = storm
-    ? `พายุฝนกำลังปกคลุม · ${atRisk} สถานีเข้าระดับเสี่ยง`
-    : atRisk > 0
-      ? `${atRisk} สถานีอยู่ในระดับเสี่ยงสูง`
-      : pumping > 0
-        ? `กำลังระบายน้ำ ${pumping} จุด — ระดับกำลังลดลง`
-        : 'โครงข่ายอยู่ในเกณฑ์ปกติ'
-
-  const riskTone = cityRisk > 70 ? 'text-hud-coral' : cityRisk > 40 ? 'text-hud-amber' : 'text-hud-green'
 
   return (
     <CollapsiblePanel
       id="ai-recommendations"
       icon="🤖"
-      title="แผนระบายน้ำจาก AI"
+      title="แผนสรุประบายน้ำ (อัปเดตตามเรดาร์)"
       defaultOpen
-      mobileDefaultOpen
-      fill
+      mobileDefaultOpen={false}
+      className="lg:max-h-[22rem]"
       badge={
-        actionable.length > 0 && (
+        recommendations.length > 0 && (
           <span className="rounded-full bg-hud-cyan/15 px-1.5 py-0.5 text-[10px] font-bold text-hud-cyan">
-            {actionable.length}
+            {recommendations.length}
           </span>
         )
       }
       actions={
         <span className="hidden font-sans text-[10px] uppercase tracking-widest text-hud-dim sm:inline">
-          heuristic v1
+          heuristic v1 · รออนุมัติ
         </span>
       }
-      bodyClassName="space-y-2"
+      bodyClassName="space-y-2 max-h-[18rem] overflow-y-auto panel-scroll"
     >
-      {/* Consolidated situation + single coordinated action — plan and alert in one place. */}
-      <div className="rounded-lg border border-hud-edge bg-black/30 p-2.5">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="text-xs text-hud-text/85">{summary}</span>
-          <span className={`data-value shrink-0 text-sm font-bold ${riskTone}`}>{cityRisk.toFixed(0)}%</span>
-        </div>
-        <button
-          onClick={equalizeNetwork}
-          disabled={drainable === 0}
-          className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-hud-cyan px-3 py-2.5 text-sm font-extrabold text-slate-900 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          ⚡ ปรับสมดุลน้ำทั้งเครือข่าย
-          {drainable > 0 && (
-            <span className="rounded-full bg-slate-900/25 px-1.5 py-0.5 text-[11px] font-bold">{drainable} จุด</span>
-          )}
-        </button>
-        <p className="mt-1.5 text-[11px] leading-4 text-hud-dim">
-          กดครั้งเดียว — ระบบเปิดประตู/สั่งสูบทุกจุดที่น้ำสูงพร้อมกัน แล้วดึงระดับน้ำทุกพื้นที่เข้าสู่สมดุลโดยอัตโนมัติ
-        </p>
-      </div>
-
-      {actionable.length > 0 && (
-        <div className="label-tech px-1 pt-1">ไล่ทีละจุด (ถ้าต้องการ)</div>
-      )}
       {recommendations.length === 0 && (
-        <p className="px-2 py-4 text-center text-xs text-hud-dim">
+        <p className="px-2 py-6 text-center text-xs text-hud-dim">
           🟢 ยังไม่มีสถานีที่ต้องดำเนินการ — โครงข่ายอยู่ในเกณฑ์ปกติ
         </p>
       )}
@@ -124,7 +80,7 @@ function HeuristicPlan() {
                   {r.action !== 'wait' && (
                     <button
                       onClick={() => approve(r.id)}
-                      className="flex-1 rounded-md bg-hud-cyan/90 px-2.5 py-1 text-xs font-bold text-slate-900 transition hover:brightness-110"
+                      className="flex-1 rounded-md bg-hud-cyan px-2.5 py-1 text-xs font-bold text-slate-900 transition hover:brightness-110"
                     >
                       ✅ อนุมัติ
                     </button>
@@ -154,9 +110,9 @@ function ManualConsole() {
 
   const sorted = useMemo(() => {
     const list = [...stations].sort((a, b) => Number(b.pumping) - Number(a.pumping) || b.level - a.level)
-    if (!q.trim()) return list
+    if (!q.trim()) return list.slice(0, 60)
     const needle = q.trim().toLowerCase()
-    return list.filter((s) => s.name.toLowerCase().includes(needle) || s.district.toLowerCase().includes(needle))
+    return list.filter((s) => s.name.toLowerCase().includes(needle) || s.district.toLowerCase().includes(needle)).slice(0, 80)
   }, [stations, q])
 
   const pumping = stations.filter((s) => s.pumping).length
@@ -167,15 +123,15 @@ function ManualConsole() {
       icon="🕹️"
       title="แผงควบคุมด้วยมือ"
       defaultOpen
-      mobileDefaultOpen
-      fill
+      mobileDefaultOpen={false}
+      className="lg:max-h-[24rem]"
       badge={
         pumping > 0 && (
           <span className="rounded-full bg-hud-cyan/15 px-1.5 py-0.5 text-[10px] font-bold text-hud-cyan">{pumping}</span>
         )
       }
       actions={<span className="hidden font-sans text-[10px] uppercase tracking-widest text-hud-dim sm:inline">manual</span>}
-      bodyClassName="space-y-2"
+      bodyClassName="space-y-2 max-h-[20rem] overflow-y-auto panel-scroll"
     >
       <div className="rounded-lg border border-hud-amber/40 bg-hud-amber/10 px-2.5 py-2 text-[11px] leading-4 text-hud-amber">
         🕹️ โหมดควบคุมด้วยมือ — ปิดตัวช่วย AI ปั๊ม/ประตูจะทำงาน<b>เมื่อกดสั่งเท่านั้น</b>

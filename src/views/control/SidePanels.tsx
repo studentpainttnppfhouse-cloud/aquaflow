@@ -98,6 +98,7 @@ export function RainRadar() {
 
 export function TideSpark() {
   const tide = useAppStore((s) => s.tide)
+  const tideFeed = useAppStore((s) => s.feeds.tide)
   const now = Date.now()
   const win = tide.series.filter((p) => p.t >= now - 6 * 3600e3 && p.t <= now + 18 * 3600e3)
   if (!win.length) return null
@@ -110,7 +111,7 @@ export function TideSpark() {
     <div>
       <div className="flex items-center justify-between">
         <h3 className="label-tech-lit">น้ำขึ้น–ลง เจ้าพระยา</h3>
-        <LiveBadge feed={tide.source} title={tide.source === 'modeled' ? 'แบบจำลองฮาร์มอนิก (ติดป้ายชัดเจน)' : 'Open-Meteo Marine / WorldTides'} />
+        <LiveBadge feed={tideFeed} title={tide.source === 'modeled' ? 'แบบจำลองฮาร์มอนิก (ติดป้ายชัดเจน)' : 'Open-Meteo Marine / WorldTides (สำรอง)'} />
       </div>
       <svg viewBox="0 0 240 60" preserveAspectRatio="none" className="mt-1.5 h-20 w-full sm:h-24">
         <path d={path} fill="none" stroke="#2DE0C8" strokeWidth="2" vectorEffect="non-scaling-stroke" />

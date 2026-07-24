@@ -1,0 +1,75 @@
+{
+  "_note": "Track A · LIVE data sources. One entry per real-time source. Real endpoints and API keys are intentionally left as TODO(paint) — fill them in. `origin: international` sources may ONLY ever be labeled 'backup' and can never drive a decision on their own. `keyEnv` names a VITE_-prefixed env var (client SPA cannot commit secrets).",
+  "sources": {
+    "tideLevel": {
+      "id": "tideLevel",
+      "label": "ระดับน้ำทะเล/ปากแม่น้ำเจ้าพระยา",
+      "unit": "m",
+      "origin": "domestic",
+      "endpoint": "TODO(paint): กรมอุทกศาสตร์ (Hydrographic Dept) tide endpoint",
+      "keyEnv": null,
+      "refreshIntervalMs": 60000,
+      "fallbackSnapshot": "src/data/fallback/waterLevels.json",
+      "backups": [
+        {
+          "id": "worldtides",
+          "label": "WorldTides",
+          "origin": "international",
+          "endpoint": "https://www.worldtides.info/api/v3",
+          "keyEnv": "VITE_WORLDTIDES_KEY",
+          "allowedAsBackup": true
+        },
+        {
+          "id": "openmeteo-marine",
+          "label": "Open-Meteo Marine",
+          "origin": "international",
+          "endpoint": "https://marine-api.open-meteo.com/v1/marine",
+          "keyEnv": null,
+          "allowedAsBackup": true
+        }
+      ]
+    },
+    "canalRiverLevel": {
+      "id": "canalRiverLevel",
+      "label": "ระดับน้ำคลอง/แม่น้ำ (ThaiWater/HII)",
+      "unit": "m",
+      "origin": "domestic",
+      "endpoint": "https://api-v3.thaiwater.net/api/v1/thaiwater30/public/waterlevel_load",
+      "keyEnv": null,
+      "refreshIntervalMs": 300000,
+      "fallbackSnapshot": "src/data/fallback/waterLevels.json",
+      "backups": []
+    },
+    "rainfall": {
+      "id": "rainfall",
+      "label": "ปริมาณฝน (HII / กรมอุตุนิยมวิทยา)",
+      "unit": "mm",
+      "origin": "domestic",
+      "endpoint": "TODO(paint): HII or Thai Meteorological Department rainfall endpoint",
+      "keyEnv": null,
+      "refreshIntervalMs": 900000,
+      "fallbackSnapshot": "src/data/fallback/openMeteo.json",
+      "backups": [
+        {
+          "id": "openmeteo-forecast",
+          "label": "Open-Meteo Forecast",
+          "origin": "international",
+          "endpoint": "https://api.open-meteo.com/v1/forecast",
+          "keyEnv": null,
+          "allowedAsBackup": true
+        }
+      ]
+    },
+    "pumpGateStatus": {
+      "id": "pumpGateStatus",
+      "label": "สถานะสถานีสูบ/ประตูระบายน้ำ (BMA flood center)",
+      "unit": "state",
+      "origin": "domestic",
+      "endpoint": "TODO(paint): BMA flood-control center pump/gate status feed",
+      "keyEnv": null,
+      "refreshIntervalMs": 60000,
+      "fallbackSnapshot": "src/data/fallback/pumpGate.json",
+      "backups": []
+    }
+  }
+}
