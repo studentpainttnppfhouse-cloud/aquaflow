@@ -10,9 +10,28 @@ const ACTION_META = {
 
 export default function RecommendationPanel() {
   const recommendations = useAppStore((s) => s.recommendations)
+  const stations = useAppStore((s) => s.stations)
+  const cityRisk = useAppStore((s) => s.cityRisk)
+  const storm = useAppStore((s) => s.storm)
   const approve = useAppStore((s) => s.approve)
-  const mode = useAppStore((s) => s.mode)
+  const equalizeNetwork = useAppStore((s) => s.equalizeNetwork)
   const [expanded, setExpanded] = useState<string | null>(null)
+
+  const actionable = recommendations.filter((r) => r.action !== 'wait')
+  const atRisk = stations.filter((s) => s.status === 'risk').length
+  const pumping = stations.filter((s) => s.pumping).length
+  const drainable = stations.filter((s) => !s.pumping && s.level > 45).length
+
+  // One honest situation sentence — replaces the separate "notification" surface.
+  const summary = storm
+    ? `พายุฝนกำลังปกคลุม · ${atRisk} สถานีเข้าระดับเสี่ยง`
+    : atRisk > 0
+      ? `${atRisk} สถานีอยู่ในระดับเสี่ยงสูง`
+      : pumping > 0
+        ? `กำลังระบายน้ำ ${pumping} จุด — ระดับกำลังลดลง`
+        : 'โครงข่ายอยู่ในเกณฑ์ปกติ'
+
+  const riskTone = cityRisk > 70 ? 'text-hud-coral' : cityRisk > 40 ? 'text-hud-amber' : 'text-hud-green'
 
   return (
     <CollapsiblePanel
@@ -20,24 +39,48 @@ export default function RecommendationPanel() {
       icon="🤖"
       title="แผนระบายน้ำจาก AI"
       defaultOpen
-      mobileDefaultOpen={false}
+      mobileDefaultOpen
       fill
       badge={
-        recommendations.length > 0 && (
+        actionable.length > 0 && (
           <span className="rounded-full bg-hud-cyan/15 px-1.5 py-0.5 text-[10px] font-bold text-hud-cyan">
-            {recommendations.length}
+            {actionable.length}
           </span>
         )
       }
       actions={
         <span className="hidden font-sans text-[10px] uppercase tracking-widest text-hud-dim sm:inline">
-          heuristic v1 · {mode === 'semi' ? 'กึ่งอัตโนมัติ' : 'รออนุมัติ'}
+          heuristic v1
         </span>
       }
       bodyClassName="space-y-2"
     >
+      {/* Consolidated situation + single coordinated action — plan and alert in one place. */}
+      <div className="rounded-lg border border-hud-edge bg-black/30 p-2.5">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-xs text-hud-text/85">{summary}</span>
+          <span className={`data-value shrink-0 text-sm font-bold ${riskTone}`}>{cityRisk.toFixed(0)}%</span>
+        </div>
+        <button
+          onClick={equalizeNetwork}
+          disabled={drainable === 0}
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-hud-cyan px-3 py-2 text-sm font-extrabold text-slate-900 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          ⚡ ปรับสมดุลน้ำทั้งเครือข่าย
+          {drainable > 0 && (
+            <span className="rounded-full bg-slate-900/25 px-1.5 py-0.5 text-[11px] font-bold">{drainable} จุด</span>
+          )}
+        </button>
+        <p className="mt-1.5 text-[11px] leading-4 text-hud-dim">
+          กดครั้งเดียว — ระบบเปิดประตู/สั่งสูบทุกจุดที่น้ำสูงพร้อมกัน แล้วดึงระดับน้ำทุกพื้นที่เข้าสู่สมดุลโดยอัตโนมัติ
+        </p>
+      </div>
+
+      {actionable.length > 0 && (
+        <div className="label-tech px-1 pt-1">ไล่ทีละจุด (ถ้าต้องการ)</div>
+      )}
       {recommendations.length === 0 && (
-        <p className="px-2 py-6 text-center text-xs text-hud-dim">
+        <p className="px-2 py-4 text-center text-xs text-hud-dim">
           🟢 ยังไม่มีสถานีที่ต้องดำเนินการ — โครงข่ายอยู่ในเกณฑ์ปกติ
         </p>
       )}
@@ -75,7 +118,7 @@ export default function RecommendationPanel() {
                   {r.action !== 'wait' && (
                     <button
                       onClick={() => approve(r.id)}
-                      className="flex-1 rounded-md bg-hud-cyan px-2.5 py-1 text-xs font-bold text-slate-900 transition hover:brightness-110"
+                      className="flex-1 rounded-md bg-hud-cyan/90 px-2.5 py-1 text-xs font-bold text-slate-900 transition hover:brightness-110"
                     >
                       ✅ อนุมัติ
                     </button>

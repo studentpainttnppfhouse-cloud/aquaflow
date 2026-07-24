@@ -9,6 +9,7 @@ import NodeDetail from './NodeDetail'
 import GaugeCluster from './GaugeCluster'
 import StatStrip from './StatStrip'
 import Footer from './Footer'
+import EmergencyBroadcast from './EmergencyBroadcast'
 import { ActivityLog, RainRadar, StationBars } from './SidePanels'
 import { fmtClock } from '../../lib/util'
 
@@ -22,18 +23,21 @@ export default function ControlCenter() {
       <Narration />
       <StatStrip />
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 lg:flex-row lg:overflow-hidden">
-        <section className="order-2 flex min-h-0 w-full flex-col gap-2 lg:order-1 lg:w-[22rem] lg:overflow-y-auto lg:panel-scroll">
+        <section className="order-2 flex min-h-0 w-full flex-col gap-2 lg:order-1 lg:w-[18.5rem] lg:overflow-y-auto lg:panel-scroll">
           <RecommendationPanel />
           <NodeDetail />
           <ActivityLog />
           <RainRadar />
           <StationBars />
         </section>
-        <section className="glass-panel order-1 min-h-[45vh] flex-1 overflow-hidden lg:order-2 lg:min-h-0">
+        <section className="glass-panel order-1 min-h-[52vh] flex-1 overflow-hidden lg:order-2 lg:min-h-0">
           <MapPanel mapRef={mapRef} />
         </section>
       </div>
-      <div className="shrink-0 px-2 pb-2">
+      <div className="shrink-0 px-2 pt-0">
+        <EmergencyBroadcast />
+      </div>
+      <div className="shrink-0 px-2 pb-2 pt-2">
         <GaugeCluster />
       </div>
       <Footer mapRef={mapRef} />
@@ -77,14 +81,14 @@ function TopStatusBar() {
 }
 
 function ConditionsBar() {
-  const { rain, tide, storm, mode, feeds } = useAppStore((s) => ({
+  const { rain, tide, storm, stormPhase, stormMinutes, feeds } = useAppStore((s) => ({
     rain: s.rain,
     tide: s.tide,
     storm: s.storm,
-    mode: s.mode,
+    stormPhase: s.stormPhase,
+    stormMinutes: s.stormMinutes,
     feeds: s.feeds,
   }))
-  const setMode = useAppStore((s) => s.setMode)
   const simulateStorm = useAppStore((s) => s.simulateStorm)
   const reset = useAppStore((s) => s.reset)
   const [now, setNow] = useState(new Date())
@@ -95,16 +99,33 @@ function ConditionsBar() {
   }, [])
 
   const hourIdx = rain.hours.findIndex((h) => new Date(h.time).getHours() === now.getHours())
-  const nowRain = storm ? 18 : hourIdx >= 0 ? rain.hours[hourIdx].precipitation : 0
-  const nowProb = storm ? 95 : hourIdx >= 0 ? rain.hours[hourIdx].probability : 0
+  const nowRain = hourIdx >= 0 ? rain.hours[hourIdx].precipitation : 0
+  const nowProb = hourIdx >= 0 ? rain.hours[hourIdx].probability : 0
+  const stormPct = Math.round((stormMinutes / 180) * 100)
+  const phaseTxt =
+    stormPhase === 'building'
+      ? 'ฝนเริ่มตก'
+      : stormPhase === 'peak'
+        ? 'ฝนตกหนักสุด'
+        : stormPhase === 'receding'
+          ? 'ฝนเริ่มซา'
+          : stormPhase === 'clearing'
+            ? 'ฝนใกล้หยุด'
+            : ''
 
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-hud-edge bg-black/10 px-3 py-1.5">
       <span className="status-pill">
         {storm ? '⛈️' : nowRain > 0.5 ? '🌧️' : '⛅'}
-        <span>
-          ฝนตอนนี้ <span className="data-value">{nowRain.toFixed(1)}</span> มม. · โอกาส <span className="data-value">{nowProb}</span>%
-        </span>
+        {storm ? (
+          <span>
+            ไทม์แลปส์พายุ <span className="data-value">{(stormMinutes / 60).toFixed(1)}</span>/3.0 ชม. · {phaseTxt}
+          </span>
+        ) : (
+          <span>
+            ฝนตอนนี้ <span className="data-value">{nowRain.toFixed(1)}</span> มม. · โอกาส <span className="data-value">{nowProb}</span>%
+          </span>
+        )}
         <LiveBadge feed={feeds.rain} title="Open-Meteo" />
       </span>
       <span className="status-pill">
@@ -116,26 +137,20 @@ function ConditionsBar() {
       </span>
 
       <div className="ml-auto flex items-center gap-2">
-        <div className="flex rounded-full border border-hud-edge bg-black/25 p-0.5 text-xs" role="group" aria-label="โหมดการทำงาน">
-          <button
-            onClick={() => setMode('confirm')}
-            className={`rounded-full px-2.5 py-1 font-semibold transition ${mode === 'confirm' ? 'bg-hud-cyan text-slate-900' : 'text-hud-dim hover:text-hud-text'}`}
-          >
-            แนะนำ–ยืนยัน
-          </button>
-          <button
-            onClick={() => setMode('semi')}
-            className={`rounded-full px-2.5 py-1 font-semibold transition ${mode === 'semi' ? 'bg-hud-cyan text-slate-900' : 'text-hud-dim hover:text-hud-text'}`}
-          >
-            กึ่งอัตโนมัติ
-          </button>
-        </div>
         <button
           onClick={simulateStorm}
           disabled={storm}
-          className="rounded-full border border-hud-coral/40 bg-hud-coral/10 px-3 py-1 text-xs font-bold text-hud-coral transition hover:bg-hud-coral/25 disabled:opacity-40"
+          className="relative overflow-hidden rounded-full border border-hud-coral/40 bg-hud-coral/10 px-3 py-1 text-xs font-bold text-hud-coral transition hover:bg-hud-coral/25 disabled:cursor-not-allowed"
+          title="จำลองพายุฝน 3 ชั่วโมงแบบไทม์แลปส์ (ฝนจะซาและหยุดเองเมื่อครบเวลา)"
         >
-          ⛈️ จำลองพายุฝน
+          {storm && (
+            <span
+              className="absolute inset-y-0 left-0 bg-hud-coral/25 transition-[width] duration-500 ease-out"
+              style={{ width: `${stormPct}%` }}
+              aria-hidden
+            />
+          )}
+          <span className="relative">{storm ? `⛈️ พายุกำลังผ่าน ${stormPct}%` : '⛈️ จำลองพายุฝน (3 ชม.)'}</span>
         </button>
         <button
           onClick={reset}
