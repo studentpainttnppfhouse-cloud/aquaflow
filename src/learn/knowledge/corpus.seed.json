@@ -1,0 +1,40 @@
+{
+  "_note": "Seed knowledge corpus for grounding operator explanations (Track B). Snippets are paraphrased/illustrative SOP/regulation/after-action content — replace with the authoritative texts. TODO(paint): add real สำนักการระบายน้ำ SOPs, DDPM regulations, and event AARs.",
+  "docs": [
+    {
+      "id": "sop-tide-window",
+      "title": "SOP: สูบน้ำลงแม่น้ำในช่วงน้ำทะเลลง",
+      "source": "TODO(paint): สำนักการระบายน้ำ SOP",
+      "tags": ["tide", "pump", "chaophraya"],
+      "text": "เมื่อระดับน้ำในคลองสูง ให้เร่งสูบลงแม่น้ำเจ้าพระยาในช่วงน้ำทะเลลง เพราะแม่น้ำมีที่ว่างรับน้ำ; หลีกเลี่ยงการสูบสวนช่วงน้ำทะเลขึ้นสูงซึ่งจะดันน้ำย้อนกลับเข้าเมือง"
+    },
+    {
+      "id": "sop-node-stagger",
+      "title": "SOP: จัดคิวสถานีที่ระบายลงโหนดเดียวกัน",
+      "source": "TODO(paint): สำนักการระบายน้ำ SOP",
+      "tags": ["coordination", "downstream", "pump"],
+      "text": "ห้ามสั่งสูบพร้อมกันทุกสถานีที่ระบายลงโหนดปลายน้ำเดียวกัน ให้จัดลำดับตามความเร่งด่วนและที่ว่างของโหนด เพื่อไม่ให้ย้ายน้ำท่วมไปยังพื้นที่ปลายน้ำ"
+    },
+    {
+      "id": "aar-2011-premprachakon",
+      "title": "AAR 2554: คลองเปรมประชากร",
+      "source": "TODO(paint): 2011 after-action review",
+      "tags": ["2011", "premprachakon", "gate"],
+      "text": "ในเหตุการณ์ปี 2554 การเปิดประตูและเดินเครื่องสูบล่าช้าทำให้ระดับน้ำเกินตลิ่ง บทเรียนคือให้เริ่มระบายเชิงรุกเมื่อฝนสะสมเกินเกณฑ์ ไม่รอจนน้ำถึงระดับวิกฤต"
+    },
+    {
+      "id": "reg-ddpm-alert-levels",
+      "title": "ระเบียบการแจ้งเตือน 4 ระดับ (ปภ.)",
+      "source": "TODO(paint): DDPM (ปภ.) regulation",
+      "tags": ["alert", "severity", "broadcast"],
+      "text": "การแจ้งเตือนสาธารณะแบ่งเป็น 4 ระดับ: ปกติ เฝ้าระวัง เตือนภัย ฉุกเฉิน; ระดับเตือนภัยขึ้นไปให้กระจายผ่านหลายช่องทางรวมถึง Cell Broadcast และสายด่วนเสียงเพื่อเข้าถึงทุกครัวเรือน"
+    },
+    {
+      "id": "sop-floodgate-vs-pump",
+      "title": "SOP: เลือกใช้ประตูระบายน้ำหรือสถานีสูบ",
+      "source": "TODO(paint): สำนักการระบายน้ำ SOP",
+      "tags": ["floodgate", "pump", "selection"],
+      "text": "ประตูระบายน้ำใช้ระบายด้วยแรงโน้มถ่วงเมื่อระดับปลายน้ำต่ำกว่าต้นน้ำ; หากปลายน้ำสูงกว่าให้ใช้สถานีสูบแทน การเปิดประตูขณะปลายน้ำสูงจะทำให้น้ำไหลย้อน"
+    }
+  ]
+}

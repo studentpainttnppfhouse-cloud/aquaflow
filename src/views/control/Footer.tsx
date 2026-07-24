@@ -3,11 +3,15 @@ import { createPortal } from "react-dom";
 import type L from "leaflet";
 import { useAppStore } from "../../store/useAppStore";
 import type { DataFeed } from "../../data/types";
+import type { Provenance } from "../../data/adapters/types";
 import { BANGKOK_CENTER, BANGKOK_ZOOM } from "./MapPanel";
 
-const FEED_SCORE: Record<DataFeed, number> = {
+const FEED_SCORE: Record<Provenance | DataFeed, number> = {
   live: 100,
+  cache: 68,
   cached: 68,
+  backup: 55,
+  sim: 40,
   modeled: 40,
 };
 

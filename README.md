@@ -98,6 +98,51 @@ seeded to a realistic Bangkok bar range) and is **labeled "จำลอง / mod
 
 Keys go in `.env` (see `.env.example`); never commit secrets.
 
+## Data layer — two tracks
+
+The data layer is split into two clearly separated tracks.
+
+### Track A — LIVE (operate; Thailand-first real-time)
+Every real-time source sits behind **one adapter interface** and returns a
+provenance-tagged envelope `Reading<T>` (`src/data/adapters/types.ts`):
+`{ value, unit, source, fetchedAt, provenance, origin, confidence,
+usableForDecision, warnings }`.
+
+- **One config** — `data-sources.config.json` lists each source
+  (`tideLevel`, `canalRiverLevel`, `rainfall`, `pumpGateStatus`) with
+  `endpoint` / `keyEnv` / `refreshIntervalMs` / `fallbackSnapshot`. Real
+  endpoints/keys are `TODO(paint)`.
+- **Graceful degradation** — `runTiers()` walks live → cache → sim per source;
+  a committed snapshot (`src/data/fallback/*`) backs every source so a dead API
+  never crashes the app — it degrades and surfaces a `warning`.
+- **International = backup only** — Open-Meteo / WorldTides can *only* ever be
+  labeled `backup` (purple "สำรอง" chip, `usableForDecision:false`); the rule is
+  enforced in `runTiers()`, so an international source can never silently drive a
+  decision.
+
+### Track B — LEARN (calibrate + ground; OFFLINE, out of the live path)
+Node-only scripts under `src/learn/**` — never imported by the browser app.
+
+1. **Historical loader** (`src/learn/history/`) normalizes past-flood records
+   into one table `{ event, timestamp, rainfall, waterLevels, pumpActions,
+   outcome }`. Raw sources (2011 floods, Hat Yai 2568, ONWR/สทนช., BMA pump
+   logs) are `TODO(paint)` normalizers; a committed `data/history/sample.json`
+   keeps the pipeline runnable.
+2. **Calibration** (`src/learn/calibrate.ts`) proposes tuned planner constants
+   from the history table and writes `learn/artifacts/calibration.json` —
+   **advisory only, never auto-applied** to the live planner.
+3. **Knowledge / RAG** (`src/learn/knowledge/`) — a **local/self-hosted**
+   embedding provider (deterministic stand-in; real model `TODO(paint)`) indexes
+   a committed corpus and grounds operator explanations. Read-only context for
+   humans; never fed back into the planner.
+
+Run the whole pipeline on seed data (no network, no keys needed):
+
+```bash
+npm run learn:test       # end-to-end tester: load → calibrate → RAG → adapter degradation
+npm run learn:calibrate  # write learn/artifacts/calibration.json
+```
+
 ## Honesty labels (read this, judges 🙂)
 
 - **The "AI" is a transparent heuristic planner** (`src/engine/recommend.ts`), not a
