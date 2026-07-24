@@ -36,6 +36,51 @@ function tideHasHeadroom(tide: TideState): boolean {
   return tide.phase === 'falling' || tide.height < mid
 }
 
+export type DrainTone = 'ok' | 'caution' | 'hold'
+export interface DrainSafety {
+  tone: DrainTone
+  /** Short Thai verdict — "ระบายลงได้" / "ระบายได้จำกัด" / "ยังไม่ควรเร่งระบาย". */
+  label: string
+  reason: string
+}
+
+/**
+ * Per-station answer to "is it OK to push more water down from here right now?".
+ * Combines the station's own headroom, the tide (a full Chao Phraya has no room),
+ * and how loaded its downstream node is. Drives the risk badge on the station card.
+ */
+export function drainSafety(s: StationState, tide: TideState, stations: StationState[]): DrainSafety {
+  const drainsToRiver = s.downstream.startsWith('CP')
+  const headroom = tideHasHeadroom(tide)
+  if (drainsToRiver && !headroom) {
+    return {
+      tone: 'hold',
+      label: 'ยังไม่ควรเร่งระบาย',
+      reason: `น้ำทะเลกำลังขึ้น (${tide.height.toFixed(2)} ม.) — แม่น้ำเจ้าพระยาเต็ม การเร่งสูบตอนนี้จะดันน้ำย้อนกลับเข้าเมือง ควรรอรอบน้ำลง`,
+    }
+  }
+  const sameNodePumping = stations.filter((x) => x.pumping && x.downstream === s.downstream).length
+  if (sameNodePumping >= 3) {
+    return {
+      tone: 'caution',
+      label: 'ระบายได้จำกัด',
+      reason: `มี ${sameNodePumping} สถานีกำลังระบายลงโหนดเดียวกัน (${s.downstream}) — เพิ่มอีกเสี่ยงย้ายน้ำท่วมไปเขตปลายน้ำ`,
+    }
+  }
+  if (s.level < 40) {
+    return {
+      tone: 'caution',
+      label: 'ระบายได้จำกัด',
+      reason: `ระดับน้ำต่ำแล้ว (${s.level.toFixed(0)}%) — ระบายเพิ่มได้ผลน้อย`,
+    }
+  }
+  return {
+    tone: 'ok',
+    label: 'ระบายลงได้',
+    reason: `${headroom ? 'น้ำทะเลกำลังลง แม่น้ำมีที่ว่างรับน้ำ' : 'ปลายทางยังมีที่ว่างรับน้ำ'} — เปิดระบายได้เต็มที่`,
+  }
+}
+
 function actionLabel(s: StationState): 'pump' | 'open_gate' {
   return s.type === 'floodgate' ? 'open_gate' : 'pump'
 }

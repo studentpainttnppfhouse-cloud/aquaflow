@@ -18,7 +18,8 @@ import { recommend } from '../engine/recommend'
 import { clamp, fmtTime, hash01, prefersReducedMotion, uid } from '../lib/util'
 
 export type View = 'landing' | 'guide-control' | 'guide-citizen' | 'control' | 'citizen'
-export type OpsMode = 'confirm' | 'semi'
+/** manual = operator drives everything · heuristic = AI recommends, operator approves · auto = AI acts + announces. */
+export type OpsMode = 'manual' | 'heuristic' | 'auto'
 export type StormPhase = 'idle' | 'building' | 'peak' | 'receding' | 'clearing'
 
 const SIM_TICK_MS = 3000
@@ -117,6 +118,8 @@ function computeTargetRisk(stations: StationState[], rainCity: number, tide: Tid
 }
 
 let loopsStarted = false
+/** Districts the AI-auto mode has already broadcast to this session (prevents re-announcing every tick). */
+const autoAnnounced = new Set<string>()
 
 export const useAppStore = create<AppState>((set, get) => {
   // ── engine helpers ─────────────────────────────────────────────────────────
@@ -134,7 +137,7 @@ export const useAppStore = create<AppState>((set, get) => {
     const next = stations.map((s) =>
       s.id === stationId ? { ...s, pumping: true, status: 'pumping' as const } : s,
     )
-    const entry = log(`${auto ? '🤖 กึ่งอัตโนมัติ: ' : '✅ อนุมัติ: '}${verb} — ${st.name} (${st.capacity_cms} ลบ.ม./ว.)`)
+    const entry = log(`${auto ? '🤖 AI อัตโนมัติ: ' : '✅ อนุมัติ: '}${verb} — ${st.name} (${st.capacity_cms} ลบ.ม./ว.)`)
     set({
       stations: next,
       activityLog: [entry, ...activityLog].slice(0, 40),
@@ -239,11 +242,25 @@ export const useAppStore = create<AppState>((set, get) => {
     set(patch)
     refreshRecommendations()
 
-    // semi-auto mode: the operator has pre-authorized clear-cut actions
+    // AI-auto mode: the model acts on clear-cut recommendations and announces
+    // every change + broadcasts to newly at-risk districts.
     const after = get()
-    if (after.mode === 'semi') {
-      const top = after.recommendations.find((r) => r.action !== 'wait' && r.score > 80)
-      if (top) execute(top.stationId, top.action, true)
+    if (after.mode === 'auto') {
+      const doable = after.recommendations.filter((r) => r.action !== 'wait' && r.score > 68).slice(0, 4)
+      doable.forEach((r) => execute(r.stationId, r.action, true))
+      // Auto public announcement for districts that just entered the risk band.
+      const riskDistricts = [...new Set(after.stations.filter((s) => s.status === 'risk').map((s) => s.district))]
+      for (const d of riskDistricts) {
+        if (autoAnnounced.has(d)) continue
+        autoAnnounced.add(d)
+        const cur = get()
+        set({
+          activityLog: [
+            log(`🤖📢 AI แจ้งเตือนอัตโนมัติ: ประกาศเตือนภัยน้ำท่วมถึงประชาชนเขต${d}`, 'alert'),
+            ...cur.activityLog,
+          ].slice(0, 40),
+        })
+      }
     }
   }
 
@@ -288,7 +305,7 @@ export const useAppStore = create<AppState>((set, get) => {
     recommendations: [],
     activityLog: [],
     district: 'พระโขนง',
-    mode: 'confirm',
+    mode: 'heuristic',
     narration: 'กำลังเชื่อมต่อแหล่งข้อมูล…',
     storm: false,
     stormT: 0,
@@ -306,7 +323,9 @@ export const useAppStore = create<AppState>((set, get) => {
         fetchWaterLevels(),
       ])
       const stations: StationState[] = stationsRes.stations.map((s) => {
-        const level = waterRes.levels[s.id] ?? 55
+        // Seeded stations use their committed reading; the rest get a stable,
+        // varied starting level so the network reads as a real spread, not a wall.
+        const level = waterRes.levels[s.id] ?? +(38 + hash01(s.id) * 34).toFixed(1)
         const st: StationState = {
           ...s,
           level,
@@ -382,13 +401,13 @@ export const useAppStore = create<AppState>((set, get) => {
       })),
     setDistrict: (district) => set({ district }),
     setMode: (mode) => {
-      set({ mode })
-      set((s) => ({
-        activityLog: [
-          log(mode === 'semi' ? 'สลับเป็นโหมดกึ่งอัตโนมัติ — ระบบดำเนินการตามคำแนะนำที่ชัดเจนได้เอง' : 'สลับเป็นโหมดแนะนำ–ยืนยัน — ทุกคำสั่งต้องได้รับอนุมัติ', 'system'),
-          ...s.activityLog,
-        ],
-      }))
+      const msg =
+        mode === 'auto'
+          ? '🤖 เข้าสู่โหมด AI อัตโนมัติ — ระบบจะสั่งระบายตามข้อมูลเรดาร์/น้ำ และประกาศทุกการเปลี่ยนแปลงเอง'
+          : mode === 'heuristic'
+            ? '🧠 โหมด Heuristic v1 — AI เสนอแผน เจ้าหน้าที่กดอนุมัติทีละจุด'
+            : '🕹️ โหมดควบคุมด้วยมือ — เจ้าหน้าที่สั่งการเองทุกจุด'
+      set((s) => ({ mode, activityLog: [log(msg, 'system'), ...s.activityLog].slice(0, 40) }))
     },
 
     approve: (recId) => {
@@ -448,6 +467,7 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     reset: () => {
+      autoAnnounced.clear()
       const s = get()
       const levels = (s.stations.length ? s.stations : []).map((st) => ({
         ...st,

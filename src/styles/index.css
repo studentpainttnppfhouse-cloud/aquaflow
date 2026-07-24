@@ -135,6 +135,32 @@ body {
   }
 }
 
+/* ── Chao Phraya glowing main discharge line ─────────────────────────────── */
+.river-glow {
+  filter: drop-shadow(0 0 6px rgba(45, 224, 200, 0.55)) drop-shadow(0 0 14px rgba(45, 224, 200, 0.3));
+}
+.river-flow {
+  stroke-dasharray: 2 16;
+  stroke-linecap: round;
+  animation: river-flow 2.6s linear infinite;
+}
+@keyframes river-flow {
+  to {
+    stroke-dashoffset: -36;
+  }
+}
+
+/* ── floating station-detail card over the map ───────────────────────────── */
+.node-float {
+  animation: node-float-in 220ms ease-out;
+}
+@keyframes node-float-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+
 /* leaflet dark-theme popup */
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
@@ -239,6 +265,7 @@ body {
   .canal-flowing,
   .radar-blob,
   .radar-sweep,
+  .river-flow,
   .status-dot-live {
     animation: none !important;
   }
