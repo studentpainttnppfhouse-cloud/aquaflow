@@ -19,10 +19,37 @@ import { clamp, fmtTime, hash01, prefersReducedMotion, uid } from '../lib/util'
 
 export type View = 'landing' | 'guide-control' | 'guide-citizen' | 'control' | 'citizen'
 export type OpsMode = 'confirm' | 'semi'
+export type StormPhase = 'idle' | 'building' | 'peak' | 'receding' | 'clearing'
 
 const SIM_TICK_MS = 3000
 /** Easing rate constant — displayed values close ~90% of the gap to target in ~1 s, fully settling over ~2 s. */
 const EASE_K = 2.2
+
+// ── Storm scenario (bounded time-lapse) ────────────────────────────────────
+// A simulated storm is NOT endless rain: it is a fixed ~3-hour event compressed
+// into a fast time-lapse. STORM_STEPS ticks carry it from t=0 → t=1, each tick
+// advancing the virtual clock by (STORM_MINUTES / STORM_STEPS) minutes. Rain
+// follows a narrative arc — chill onset, a sustained climax, then a long taper
+// to zero — so the operator sees levels surge toward danger, then the inflow
+// stop on its own, exactly the "water rushes in, then equalizes" shape.
+const STORM_STEPS = 22
+const STORM_MINUTES = 180
+
+/** 0→1 storm progress → rainfall multiplier (0..1): fast onset, sustained peak, long taper. */
+function stormIntensity(t: number): number {
+  if (t <= 0 || t >= 1) return 0
+  const rise = Math.min(1, t / 0.18) // ramp up over the first ~18%
+  const fall = t < 0.45 ? 1 : Math.max(0, 1 - (t - 0.45) / 0.55) // taper from 45% → 100%
+  return rise * fall
+}
+
+function stormPhaseOf(t: number): StormPhase {
+  if (t <= 0 || t >= 1) return 'idle'
+  if (t < 0.18) return 'building'
+  if (t < 0.45) return 'peak'
+  if (t < 0.85) return 'receding'
+  return 'clearing'
+}
 
 interface AppState {
   ready: boolean
@@ -41,6 +68,11 @@ interface AppState {
   mode: OpsMode
   narration: string
   storm: boolean
+  /** Storm progress 0→1 through the bounded time-lapse event. */
+  stormT: number
+  /** Simulated minutes elapsed within the storm event (0..STORM_MINUTES). */
+  stormMinutes: number
+  stormPhase: StormPhase
   feeds: { rain: DataFeed; water: DataFeed; tide: DataFeed; stations: DataFeed }
   /** Station selected on the Control Center map — drives the Node Detail rail panel. */
   selectedStationId: string | null
@@ -53,9 +85,16 @@ interface AppState {
   approve: (recId: string) => void
   commandStation: (stationId: string) => void
   selectStation: (stationId: string | null) => void
+  /** One-tap coordinated response: drain/open every over-threshold station at once to equalize the network. */
+  equalizeNetwork: () => void
+  /** Push an emergency flood warning to residents of a district (records it in the ops log). */
+  broadcastAlert: (district: string) => void
   simulateStorm: () => void
   reset: () => void
 }
+
+/** Level at or below which a station is already balanced and left alone by equalizeNetwork. */
+const SAFE_FLOOR = 45
 
 function log(text: string, kind: LogEntry['kind'] = 'action'): LogEntry {
   return { id: uid('log'), time: fmtTime(new Date()), text, kind }
@@ -112,10 +151,28 @@ export const useAppStore = create<AppState>((set, get) => {
     const { rain, storm, tide } = state
     let anyStopped: string | null = null
 
+    // Advance the bounded storm clock. The event runs its narrative arc and then
+    // clears itself — rain is never open-ended.
+    let stormT = state.stormT
+    let stormActive = storm
+    let stormEnded = false
+    if (storm) {
+      stormT = Math.min(1, stormT + 1 / STORM_STEPS)
+      if (stormT >= 1) {
+        stormActive = false
+        stormEnded = true
+      }
+    }
+    const intensity = stormActive ? stormIntensity(stormT) : 0
+    const stormMinutes = Math.round(stormT * STORM_MINUTES)
+    const stormPhase = stormActive ? stormPhaseOf(stormT) : 'idle'
+
     const stations = state.stations.map((s) => {
-      const mm3h = storm ? 25 + hash01(s.id) * 15 : rain.perStation[s.id] ?? 0
+      // Storm rainfall follows the intensity curve (peaks at the climax, tapers to 0);
+      // outside a storm we use the real per-station forecast.
+      const mm3h = stormActive ? intensity * (26 + hash01(s.id) * 18) : rain.perStation[s.id] ?? 0
       // inflow: rain accumulates; a light base seepage keeps the sim alive
-      const inflow = mm3h * 0.045 + 0.05
+      const inflow = mm3h * 0.05 + 0.05
       let target = s.targetLevel + inflow
       let pumping = s.pumping
       if (pumping) {
@@ -137,24 +194,43 @@ export const useAppStore = create<AppState>((set, get) => {
       return next
     })
 
-    const rainCity = storm ? 32 : next3hMm(rain.hours)
+    const rainCity = stormActive ? intensity * 34 : next3hMm(rain.hours)
     const targetRisk = computeTargetRisk(stations, rainCity, tide)
 
-    const patch: Partial<AppState> = { stations, targetRisk }
+    const patch: Partial<AppState> = {
+      stations,
+      targetRisk,
+      storm: stormActive,
+      stormT,
+      stormMinutes,
+      stormPhase,
+    }
+    const logs: LogEntry[] = []
     if (anyStopped) {
-      patch.activityLog = [
-        log(`⏹ ${anyStopped} ระบายถึงระดับปลอดภัยแล้ว หยุดสูบอัตโนมัติ`, 'system'),
-        ...state.activityLog,
-      ].slice(0, 40)
+      logs.push(log(`⏹ ${anyStopped} ระบายถึงระดับปลอดภัยแล้ว หยุดสูบอัตโนมัติ`, 'system'))
+    }
+    if (stormEnded) {
+      logs.push(log('🌤️ พายุฝนจำลองเคลื่อนผ่านแล้ว (ครบ 3 ชม.) — ฝนหยุดตก เข้าสู่ช่วงระบายน้ำ', 'system'))
+    }
+    if (logs.length) {
+      patch.activityLog = [...logs, ...state.activityLog].slice(0, 40)
     }
 
     // narration heartbeat
     const pumping = stations.filter((s) => s.pumping).length
     const atRisk = stations.filter((s) => s.status === 'risk').length
-    if (pumping > 0) {
+    if (stormActive) {
+      const phaseTxt =
+        stormPhase === 'building'
+          ? 'ฝนเริ่มตก'
+          : stormPhase === 'peak'
+            ? 'ฝนตกหนักสุด'
+            : stormPhase === 'receding'
+              ? 'ฝนเริ่มซา'
+              : 'ฝนใกล้หยุด'
+      patch.narration = `⛈️ ไทม์แลปส์พายุ ชั่วโมงที่ ${(stormMinutes / 60).toFixed(1)}/3.0 · ${phaseTxt} · ${atRisk} สถานีแตะระดับเสี่ยง${pumping > 0 ? ` · ระบาย ${pumping} จุด` : ' — กด “ปรับสมดุลน้ำ” เพื่อระบายทั้งเครือข่าย'}`
+    } else if (pumping > 0) {
       patch.narration = `🔻 กำลังระบายน้ำ ${pumping} จุด · ความเสี่ยงเมือง ${state.cityRisk.toFixed(0)}% และกำลังลดลง`
-    } else if (storm) {
-      patch.narration = `⛈️ พายุฝนปกคลุมพื้นที่ · ${atRisk} สถานีแตะระดับเสี่ยง — รอการอนุมัติแผนระบาย`
     } else if (atRisk > 0) {
       patch.narration = `⚠️ ${atRisk} สถานีอยู่ในระดับเฝ้าระวังสูง · น้ำทะเล${tide.phase === 'falling' ? 'กำลังลง เหมาะแก่การสูบ' : 'กำลังขึ้น'}`
     } else {
@@ -215,6 +291,9 @@ export const useAppStore = create<AppState>((set, get) => {
     mode: 'confirm',
     narration: 'กำลังเชื่อมต่อแหล่งข้อมูล…',
     storm: false,
+    stormT: 0,
+    stormMinutes: 0,
+    stormPhase: 'idle',
     feeds: { rain: 'cached', water: 'cached', tide: 'modeled', stations: 'cached' },
     selectedStationId: null,
 
@@ -319,13 +398,49 @@ export const useAppStore = create<AppState>((set, get) => {
     commandStation: (stationId) => execute(stationId, 'pump'),
     selectStation: (stationId) => set({ selectedStationId: stationId }),
 
+    equalizeNetwork: () => {
+      const { stations, activityLog, cityRisk } = get()
+      const targets = stations.filter((s) => !s.pumping && s.level > SAFE_FLOOR)
+      if (!targets.length) {
+        set({ narration: '✅ เครือข่ายอยู่ในสมดุลแล้ว — ไม่มีจุดที่ต้องระบายเพิ่ม' })
+        return
+      }
+      const ids = new Set(targets.map((s) => s.id))
+      const next = stations.map((s) =>
+        ids.has(s.id) ? { ...s, pumping: true, status: 'pumping' as const } : s,
+      )
+      set({
+        stations: next,
+        narration: `⚡ ปรับสมดุลน้ำทั้งเครือข่าย · สั่งระบาย ${targets.length} จุดพร้อมกัน · ความเสี่ยงเมือง ${cityRisk.toFixed(0)}% กำลังลดลง`,
+        activityLog: [
+          log(`⚡ ปรับสมดุลเครือข่าย: เปิดระบาย/สูบน้ำพร้อมกัน ${targets.length} จุด — ดึงระดับน้ำทุกพื้นที่เข้าสู่ระดับปลอดภัย`),
+          ...activityLog,
+        ].slice(0, 40),
+      })
+      refreshRecommendations()
+    },
+
+    broadcastAlert: (district) => {
+      const { activityLog } = get()
+      set({
+        narration: `📢 ส่งประกาศเตือนภัยน้ำท่วมถึงประชาชนเขต${district}แล้ว`,
+        activityLog: [
+          log(`📢 ประกาศเตือนภัย: แจ้งเตือนน้ำท่วมถึงประชาชนเขต${district}`, 'alert'),
+          ...activityLog,
+        ].slice(0, 40),
+      })
+    },
+
     simulateStorm: () => {
       if (get().storm) return
       set((s) => ({
         storm: true,
-        narration: '⛈️ ตรวจพบพายุฝนกำลังแรงเคลื่อนเข้าปกคลุมกรุงเทพฯ — ระดับน้ำทุกคลองกำลังขึ้นเร็ว',
+        stormT: 0,
+        stormMinutes: 0,
+        stormPhase: 'building',
+        narration: '⛈️ เริ่มไทม์แลปส์พายุฝน 3 ชม. — ฝนกำลังเริ่มตก ระดับน้ำจะไต่ขึ้นเข้าสู่จุดวิกฤต แล้วจึงซาลง',
         activityLog: [
-          log('⛈️ สถานการณ์จำลอง: พายุฝน 30+ มม./3ชม. ปกคลุมทั้งเมือง', 'alert'),
+          log('⛈️ สถานการณ์จำลอง (ไทม์แลปส์ 3 ชม.): พายุฝนเคลื่อนเข้าปกคลุมกรุงเทพฯ', 'alert'),
           ...s.activityLog,
         ],
       }))
@@ -343,6 +458,9 @@ export const useAppStore = create<AppState>((set, get) => {
       levels.forEach((st) => (st.status = statusOf(st)))
       set({
         storm: false,
+        stormT: 0,
+        stormMinutes: 0,
+        stormPhase: 'idle',
         stations: levels,
         recommendations: [],
         narration: '↺ รีเซ็ตสถานการณ์แล้ว · ระบบกลับสู่การเฝ้าระวังปกติ',
