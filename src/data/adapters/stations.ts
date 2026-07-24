@@ -29,9 +29,16 @@ export interface StationsResult {
 }
 
 function seed(): { stations: Station[]; canals: Canal[] } {
+  // Give every canal a nominal channel depth (the laser reference datum) — a
+  // river reach is deeper than a drainage khlong. Explicit depth_m in the JSON
+  // wins; otherwise fall back to a per-kind default so the AI always has one.
+  const canals = (canalsJson as unknown as { canals: Canal[] }).canals.map((c) => ({
+    ...c,
+    depth_m: c.depth_m ?? (c.kind === 'river' ? 8 : 3.5),
+  }))
   return {
     stations: (stationsJson as unknown as { stations: Station[] }).stations,
-    canals: (canalsJson as unknown as { canals: Canal[] }).canals,
+    canals,
   }
 }
 

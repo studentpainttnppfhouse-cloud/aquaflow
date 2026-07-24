@@ -14,7 +14,7 @@ Built for UTCC AI Hackathon 2026 ("software over concrete") — a working demo o
 
 ## Product Purpose
 
-AquaFlow coordinates Bangkok's independently-operated pump stations and floodgates into one network view, so operators stop draining one district straight into the next. A transparent heuristic planner (explicitly labeled as non-ML, ML-replaceable) proposes a tide-aware, coordinated drainage plan; the operator approves or the system runs pre-authorized semi-auto. The citizen app mirrors the same live state so residents see the effect of an approved action in real time (red → green).
+AquaFlow coordinates Bangkok's independently-operated pump stations and floodgates into one network view, so operators stop draining one district straight into the next. It runs in two explicit postures — **Manual** (pure human control: pumps/gates fire only on a click, for maintenance, equipment testing, or when a sensor is faulty and the data can't be trusted) and **Heuristic** (a transparent, non-ML, ML-replaceable planner proposes a tide-aware, coordinated drainage plan). In both, a human approves every action — the system never fires a pump on its own. The citizen app mirrors the same live state so residents see the effect of an approved action in real time (red → green).
 
 Success = an operator can read network state, understand *why* the AI is recommending an action, and act on it in seconds — not a dashboard that looks impressive but slows the decision down.
 

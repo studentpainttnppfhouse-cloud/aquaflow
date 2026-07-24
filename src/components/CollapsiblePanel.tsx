@@ -1,6 +1,7 @@
-import { useEffect, useId, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 
 const STORAGE_PREFIX = 'aquaflow.panel.'
+const HEIGHT_PREFIX = 'aquaflow.panelH.'
 
 function initialOpen(id: string, defaultOpen: boolean, mobileDefaultOpen?: boolean): boolean {
   if (typeof window === 'undefined') return defaultOpen
@@ -8,6 +9,19 @@ function initialOpen(id: string, defaultOpen: boolean, mobileDefaultOpen?: boole
   if (stored !== null) return stored === '1'
   const isMobile = window.matchMedia('(max-width: 1023px)').matches
   return isMobile && mobileDefaultOpen !== undefined ? mobileDefaultOpen : defaultOpen
+}
+
+function initialHeight(id: string): number | null {
+  if (typeof window === 'undefined') return null
+  const stored = window.sessionStorage.getItem(HEIGHT_PREFIX + id)
+  return stored !== null ? Number(stored) : null
+}
+
+const MIN_H = 72
+const MAX_H = 720
+const DEFAULT_H = 190
+function clampHeight(h: number): number {
+  return Math.max(MIN_H, Math.min(MAX_H, h))
 }
 
 interface CollapsiblePanelProps {
@@ -23,6 +37,8 @@ interface CollapsiblePanelProps {
   actions?: ReactNode
   /** When true, this panel claims remaining flex space in its column while open (only one panel per rail should set this). */
   fill?: boolean
+  /** When true, the operator can drag the bottom edge to set the panel's body height (persisted). Ignored when `fill`. */
+  resizable?: boolean
   children: ReactNode
   className?: string
   bodyClassName?: string
@@ -37,16 +53,53 @@ export default function CollapsiblePanel({
   badge,
   actions,
   fill = false,
+  resizable = false,
   children,
   className = '',
   bodyClassName = '',
 }: CollapsiblePanelProps) {
   const [open, setOpen] = useState(() => initialOpen(id, defaultOpen, mobileDefaultOpen))
+  const [height, setHeight] = useState<number | null>(() => (resizable ? initialHeight(id) ?? DEFAULT_H : null))
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const dragStart = useRef<{ y: number; h: number } | null>(null)
   const panelId = useId()
 
   useEffect(() => {
     window.sessionStorage.setItem(STORAGE_PREFIX + id, open ? '1' : '0')
   }, [id, open])
+
+  useEffect(() => {
+    if (height != null) window.sessionStorage.setItem(HEIGHT_PREFIX + id, String(Math.round(height)))
+  }, [id, height])
+
+  const onResizePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const startH = bodyRef.current?.getBoundingClientRect().height ?? height ?? 160
+      dragStart.current = { y: e.clientY, h: startH }
+      const onMove = (ev: PointerEvent) => {
+        if (!dragStart.current) return
+        const next = clampHeight(dragStart.current.h + (ev.clientY - dragStart.current.y))
+        setHeight(next)
+      }
+      const onUp = () => {
+        dragStart.current = null
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        document.body.style.userSelect = ''
+      }
+      document.body.style.userSelect = 'none'
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+    },
+    [height],
+  )
+
+  const resetHeight = useCallback(() => {
+    setHeight(DEFAULT_H)
+    window.sessionStorage.removeItem(HEIGHT_PREFIX + id)
+  }, [id])
 
   return (
     <div
@@ -95,9 +148,32 @@ export default function CollapsiblePanel({
       </div>
       <div id={panelId} className="collapse-track min-h-0" data-open={open} style={fill ? { flex: '1 1 auto' } : undefined}>
         <div className={`collapse-inner ${fill ? 'flex min-h-0 flex-col' : ''}`}>
-          <div className={`border-t border-hud-edge p-2.5 ${fill ? 'min-h-0 flex-1 overflow-y-auto panel-scroll' : ''} ${bodyClassName}`}>
+          <div
+            ref={bodyRef}
+            className={`border-t border-hud-edge p-2.5 ${
+              fill
+                ? 'min-h-0 flex-1 overflow-y-auto panel-scroll max-h-[75vh] lg:max-h-none'
+                : resizable && height != null
+                  ? 'overflow-y-auto panel-scroll'
+                  : ''
+            } ${bodyClassName}`}
+            style={!fill && resizable && height != null ? { height } : undefined}
+          >
             {children}
           </div>
+          {resizable && !fill && open && (
+            <div
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label={`ปรับความสูง ${title} (ดับเบิลคลิกเพื่อรีเซ็ต)`}
+              onPointerDown={onResizePointerDown}
+              onDoubleClick={resetHeight}
+              title="ลากเพื่อปรับความสูง · ดับเบิลคลิกเพื่อรีเซ็ต"
+              className="group flex h-3 cursor-ns-resize touch-none items-center justify-center border-t border-hud-edge/60 hover:bg-white/5"
+            >
+              <span className="h-0.5 w-8 rounded-full bg-hud-edgeStrong/70 transition group-hover:bg-hud-cyan/70" aria-hidden />
+            </div>
+          )}
         </div>
       </div>
     </div>

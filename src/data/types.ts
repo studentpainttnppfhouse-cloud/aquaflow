@@ -14,6 +14,13 @@ export interface Station {
   capacity_cms: number
   /** Shared discharge node — the coordination rule staggers stations that drain to the same node. */
   downstream: string
+  /**
+   * Depth of the canal/sump bed below the bank at this point (metres). The
+   * distance a laser/ultrasonic level sensor mounted at the bank reads down to
+   * an empty bed. Used to turn a % level into a real water-column depth and a
+   * metres-of-freeboard figure the AI planner ingests.
+   */
+  bedDepth_m: number
   approx?: boolean
 }
 
@@ -28,12 +35,20 @@ export interface StationState extends Station {
   status: StationStatus
   /** Forecast rain at this location over the next 3 h (mm). */
   rain3h: number
+  /** Laser/ultrasonic reading: current water-column depth at the sensor (m). */
+  laserDepth_m: number
+  /** Metres of headroom left before water reaches the bank (bedDepth − laserDepth). */
+  freeboard_m: number
+  /** METAR-style coded condition string fed to the AI planner. */
+  metar: string
 }
 
 export interface Canal {
   id: string
   name: string
   kind: 'canal' | 'river'
+  /** Nominal channel depth (m) — laser reference datum for stations on this canal. */
+  depth_m: number
   approx: boolean
   path: [number, number][]
 }

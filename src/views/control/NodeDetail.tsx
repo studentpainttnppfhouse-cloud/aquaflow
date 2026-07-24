@@ -68,11 +68,29 @@ export default function NodeDetail() {
           <dt className="label-tech">ฝนคาดการณ์ 3 ชม.</dt>
           <dd className="data-value mt-0.5 text-hud-text">{station.rain3h.toFixed(1)} มม.</dd>
         </div>
+        <div className="rounded-lg border border-hud-edge bg-black/20 px-2 py-1.5">
+          <dt className="label-tech">เลเซอร์วัดน้ำลึก</dt>
+          <dd className="data-value mt-0.5 text-hud-text">
+            {station.laserDepth_m.toFixed(2)}
+            <span className="text-hud-dim"> / {station.bedDepth_m.toFixed(2)} ม.</span>
+          </dd>
+        </div>
+        <div className="rounded-lg border border-hud-edge bg-black/20 px-2 py-1.5">
+          <dt className="label-tech">ระยะถึงตลิ่ง</dt>
+          <dd className={`data-value mt-0.5 ${station.freeboard_m < 1 ? 'text-hud-coral' : 'text-hud-text'}`}>
+            {station.freeboard_m.toFixed(2)} ม.
+          </dd>
+        </div>
         <div className="col-span-2 rounded-lg border border-hud-edge bg-black/20 px-2 py-1.5">
           <dt className="label-tech">คลอง/ปลายทาง</dt>
           <dd className="mt-0.5 truncate text-hud-text">{station.canal}</dd>
         </div>
       </dl>
+
+      <div className="mt-2 rounded-lg border border-hud-edge bg-black/30 px-2 py-1.5">
+        <dt className="label-tech">รหัสสภาพสถานี (METAR) · ป้อนเข้าโมเดล AI</dt>
+        <dd className="data-value mt-1 break-all text-[10px] leading-4 text-hud-cyan">{station.metar}</dd>
+      </div>
       {station.approx && <p className="mt-2 text-[10px] text-hud-dim">พิกัดสถานีเป็นค่าโดยประมาณจากข้อมูลเปิด</p>}
 
       <button

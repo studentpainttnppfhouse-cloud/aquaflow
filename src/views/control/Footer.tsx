@@ -82,19 +82,37 @@ export default function Footer({ mapRef }: { mapRef: React.RefObject<L.Map> }) {
         tone={networkLoad > 70 ? "coral" : networkLoad > 0 ? "amber" : "cyan"}
       />
 
-      <div className="ml-auto flex items-center gap-1.5">
-        <button
-          onClick={() => setMode(mode === "confirm" ? "semi" : "confirm")}
-          aria-pressed={mode === "confirm"}
-          className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
-            mode === "confirm"
-              ? "border-hud-cyan/50 bg-hud-cyan/15 text-hud-cyan"
-              : "border-hud-edge text-hud-dim hover:text-hud-text"
-          }`}
-          title="สลับเป็นโหมดยืนยันด้วยตนเองทุกคำสั่ง"
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+        <div
+          role="group"
+          aria-label="โหมดการทำงาน"
+          className="flex items-center rounded-full border border-hud-edge bg-black/20 p-0.5"
         >
-          🕹️ Manual Override
-        </button>
+          <button
+            onClick={() => setMode("manual")}
+            aria-pressed={mode === "manual"}
+            title="ควบคุมด้วยมือ — ปั๊มทำงานเมื่อกดสั่งเท่านั้น (ซ่อมบำรุง/ทดสอบ/เซ็นเซอร์ผิดพลาด)"
+            className={`rounded-full px-3 py-1 text-xs font-bold transition ${
+              mode === "manual"
+                ? "bg-hud-amber/20 text-hud-amber"
+                : "text-hud-dim hover:text-hud-text"
+            }`}
+          >
+            🕹️ Manual
+          </button>
+          <button
+            onClick={() => setMode("heuristic")}
+            aria-pressed={mode === "heuristic"}
+            title="ฮิวริสติก (AI) — ระบบเสนอแผนประสานงาน เจ้าหน้าที่อนุมัติทุกคำสั่ง"
+            className={`rounded-full px-3 py-1 text-xs font-bold transition ${
+              mode === "heuristic"
+                ? "bg-hud-cyan/20 text-hud-cyan"
+                : "text-hud-dim hover:text-hud-text"
+            }`}
+          >
+            🤖 Heuristic
+          </button>
+        </div>
 
         <div className="relative">
           <button

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type L from 'leaflet'
 import { useAppStore } from '../../store/useAppStore'
 import LiveBadge from '../../components/LiveBadge'
@@ -6,6 +6,7 @@ import MapPanel from './MapPanel'
 import Narration from './Narration'
 import RecommendationPanel from './RecommendationPanel'
 import NodeDetail from './NodeDetail'
+import ModelCard from './ModelCard'
 import GaugeCluster from './GaugeCluster'
 import StatStrip from './StatStrip'
 import Footer from './Footer'
@@ -13,24 +14,49 @@ import EmergencyBroadcast from './EmergencyBroadcast'
 import { ActivityLog, RainRadar, StationBars } from './SidePanels'
 import { fmtClock } from '../../lib/util'
 
+const RAIL_KEY = 'aquaflow.railWidth'
+const RAIL_MIN = 240
+const RAIL_MAX = 560
+const RAIL_DEFAULT = 296 // 18.5rem
+
+function useRailWidth() {
+  const [width, setWidth] = useState<number>(() => {
+    if (typeof window === 'undefined') return RAIL_DEFAULT
+    const stored = Number(window.sessionStorage.getItem(RAIL_KEY))
+    return Number.isFinite(stored) && stored >= RAIL_MIN ? stored : RAIL_DEFAULT
+  })
+  useEffect(() => {
+    window.sessionStorage.setItem(RAIL_KEY, String(Math.round(width)))
+  }, [width])
+  return [width, setWidth] as const
+}
+
 export default function ControlCenter() {
   const mapRef = useRef<L.Map>(null)
+  const [railW, setRailW] = useRailW()
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-gradient-to-b from-hud-bg to-hud-bg2">
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto bg-gradient-to-b from-hud-bg to-hud-bg2 lg:overflow-hidden">
       <TopStatusBar />
       <ConditionsBar />
       <Narration />
       <StatStrip />
-      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 lg:flex-row lg:overflow-hidden">
-        <section className="order-2 flex min-h-0 w-full flex-col gap-2 lg:order-1 lg:w-[18.5rem] lg:overflow-y-auto lg:panel-scroll">
+      <div className="flex min-h-0 flex-col gap-2 p-2 lg:flex-1 lg:flex-row lg:gap-0 lg:overflow-hidden">
+        <section
+          style={{ '--rail-w': `${railW}px` } as React.CSSProperties}
+          className="order-2 flex min-h-0 w-full shrink-0 flex-col gap-2 lg:order-1 lg:w-[var(--rail-w)] lg:overflow-y-auto lg:pr-2 lg:panel-scroll"
+        >
           <RecommendationPanel />
           <NodeDetail />
+          <ModelCard />
           <ActivityLog />
           <RainRadar />
           <StationBars />
         </section>
-        <section className="glass-panel order-1 min-h-[52vh] flex-1 overflow-hidden lg:order-2 lg:min-h-0">
+
+        <RailDivider width={railW} onResize={setRailW} />
+
+        <section className="glass-panel order-1 min-h-[46vh] flex-1 overflow-hidden lg:order-2 lg:min-h-0">
           <MapPanel mapRef={mapRef} />
         </section>
       </div>
@@ -41,6 +67,48 @@ export default function ControlCenter() {
         <GaugeCluster />
       </div>
       <Footer mapRef={mapRef} />
+    </div>
+  )
+}
+
+// Small alias so the exported hook name reads naturally at the call site.
+const useRailW = useRailWidth
+
+/** Draggable vertical divider between the rail and the map (desktop only). */
+function RailDivider({ width, onResize }: { width: number; onResize: (w: number) => void }) {
+  const start = useRef<{ x: number; w: number } | null>(null)
+  const onDown = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault()
+      start.current = { x: e.clientX, w: width }
+      const move = (ev: PointerEvent) => {
+        if (!start.current) return
+        const next = Math.max(RAIL_MIN, Math.min(RAIL_MAX, start.current.w + (ev.clientX - start.current.x)))
+        onResize(next)
+      }
+      const up = () => {
+        start.current = null
+        window.removeEventListener('pointermove', move)
+        window.removeEventListener('pointerup', up)
+        document.body.style.userSelect = ''
+      }
+      document.body.style.userSelect = 'none'
+      window.addEventListener('pointermove', move)
+      window.addEventListener('pointerup', up)
+    },
+    [width, onResize],
+  )
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="ปรับความกว้างแผงข้าง (ดับเบิลคลิกเพื่อรีเซ็ต)"
+      onPointerDown={onDown}
+      onDoubleClick={() => onResize(RAIL_DEFAULT)}
+      title="ลากเพื่อปรับความกว้างแผงข้าง · ดับเบิลคลิกเพื่อรีเซ็ต"
+      className="group relative z-[10] hidden w-2 shrink-0 cursor-ew-resize touch-none items-stretch lg:flex"
+    >
+      <span className="mx-auto my-2 w-0.5 rounded-full bg-hud-edgeStrong/60 transition group-hover:bg-hud-cyan/70" aria-hidden />
     </div>
   )
 }
@@ -57,7 +125,7 @@ function TopStatusBar() {
   const anyLive = Object.values(feeds).some((f) => f === 'live')
 
   return (
-    <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-hud-edge bg-hud-panelSolid/90 px-4 py-2.5 pr-24 backdrop-blur sm:pr-56">
+    <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-hud-edge bg-hud-panelSolid/90 px-3 py-2.5 pr-16 backdrop-blur sm:px-4 sm:pr-56">
       <h1 className="flex w-full items-center gap-2 text-lg font-extrabold tracking-tight text-hud-text sm:w-auto">
         🌊 Aqua<span className="text-hud-cyan">Flow</span>
         <span className="label-tech hidden sm:inline">Control Center · กทม.</span>

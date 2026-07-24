@@ -104,6 +104,10 @@ export default function MapPanel({ mapRef }: { mapRef?: React.RefObject<L.Map> }
                 </span>
               </div>
               <div className="mt-1 text-xs text-hud-dim">คาดฝน 3 ชม.: {s.rain3h.toFixed(1)} มม.</div>
+              <div className="text-xs text-hud-dim">
+                เลเซอร์วัดน้ำลึก {s.laserDepth_m.toFixed(2)}/{s.bedDepth_m.toFixed(2)} ม. · เหลือถึงตลิ่ง{' '}
+                <span className={s.freeboard_m < 1 ? 'text-hud-coral' : ''}>{s.freeboard_m.toFixed(2)} ม.</span>
+              </div>
               <button
                 onClick={() => commandStation(s.id)}
                 disabled={s.pumping}

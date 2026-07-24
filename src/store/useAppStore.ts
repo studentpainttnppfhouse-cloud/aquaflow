@@ -15,10 +15,21 @@ import { fetchStations } from '../data/adapters/stations'
 import { fetchTide, modeledTideAt } from '../data/adapters/tide'
 import { fetchWaterLevels } from '../data/adapters/thaiWater'
 import { recommend } from '../engine/recommend'
+import { freeboard, laserDepth, stationMetar } from '../lib/metar'
 import { clamp, fmtTime, hash01, prefersReducedMotion, uid } from '../lib/util'
 
 export type View = 'landing' | 'guide-control' | 'guide-citizen' | 'control' | 'citizen'
-export type OpsMode = 'confirm' | 'semi'
+/**
+ * Two operating postures (the AI auto-run mode was removed — the system never
+ * fires a pump on its own):
+ *  · `manual`    — pure human control. Pumps/gates run ONLY when a person clicks.
+ *                  The heuristic planner is off. For maintenance, testing new
+ *                  equipment, or when a sensor is faulty and the data can't be
+ *                  trusted (low-confidence situations).
+ *  · `heuristic` — the AI planner reads the network and proposes a coordinated,
+ *                  tide-aware plan; a human still approves every action.
+ */
+export type OpsMode = 'manual' | 'heuristic'
 export type StormPhase = 'idle' | 'building' | 'peak' | 'receding' | 'clearing'
 
 const SIM_TICK_MS = 3000
@@ -84,6 +95,8 @@ interface AppState {
   setMode: (m: OpsMode) => void
   approve: (recId: string) => void
   commandStation: (stationId: string) => void
+  /** Manual stop — halt a running pump/gate (maintenance, testing, faulty sensor). */
+  stopStation: (stationId: string) => void
   selectStation: (stationId: string | null) => void
   /** One-tap coordinated response: drain/open every over-threshold station at once to equalize the network. */
   equalizeNetwork: () => void
@@ -122,11 +135,12 @@ export const useAppStore = create<AppState>((set, get) => {
   // ── engine helpers ─────────────────────────────────────────────────────────
 
   const refreshRecommendations = () => {
-    const { stations, tide } = get()
-    set({ recommendations: recommend({ stations, tide }) })
+    const { stations, tide, mode } = get()
+    // Manual mode is pure human control — the AI planner is off and proposes nothing.
+    set({ recommendations: mode === 'manual' ? [] : recommend({ stations, tide }) })
   }
 
-  const execute = (stationId: string, action: RecAction, auto = false) => {
+  const execute = (stationId: string, action: RecAction) => {
     const { stations, activityLog, cityRisk } = get()
     const st = stations.find((s) => s.id === stationId)
     if (!st || st.pumping || action === 'wait') return
@@ -134,7 +148,7 @@ export const useAppStore = create<AppState>((set, get) => {
     const next = stations.map((s) =>
       s.id === stationId ? { ...s, pumping: true, status: 'pumping' as const } : s,
     )
-    const entry = log(`${auto ? '🤖 กึ่งอัตโนมัติ: ' : '✅ อนุมัติ: '}${verb} — ${st.name} (${st.capacity_cms} ลบ.ม./ว.)`)
+    const entry = log(`✅ สั่งการโดยเจ้าหน้าที่: ${verb} — ${st.name} (${st.capacity_cms} ลบ.ม./ว.)`)
     set({
       stations: next,
       activityLog: [entry, ...activityLog].slice(0, 40),
@@ -191,6 +205,10 @@ export const useAppStore = create<AppState>((set, get) => {
         trend: +(((target - s.targetLevel) / (SIM_TICK_MS / 1000)) * 60).toFixed(1),
       }
       next.status = statusOf(next)
+      // Refresh the physical depth readings + the coded METAR line the AI ingests.
+      next.laserDepth_m = laserDepth(next)
+      next.freeboard_m = freeboard(next)
+      next.metar = stationMetar(next, tide)
       return next
     })
 
@@ -238,13 +256,9 @@ export const useAppStore = create<AppState>((set, get) => {
     }
     set(patch)
     refreshRecommendations()
-
-    // semi-auto mode: the operator has pre-authorized clear-cut actions
-    const after = get()
-    if (after.mode === 'semi') {
-      const top = after.recommendations.find((r) => r.action !== 'wait' && r.score > 80)
-      if (top) execute(top.stationId, top.action, true)
-    }
+    // NOTE: no auto-dispatch. The system never fires a pump on its own — in
+    // heuristic mode the AI only *proposes*; a human approves. In manual mode
+    // the planner is off entirely.
   }
 
   // ── per-frame easing: displayed values glide toward targets ───────────────
@@ -265,6 +279,8 @@ export const useAppStore = create<AppState>((set, get) => {
           dirty = true
           const next = { ...st, level }
           next.status = statusOf(next)
+          next.laserDepth_m = laserDepth(next)
+          next.freeboard_m = freeboard(next)
           return next
         }
         return st
@@ -288,7 +304,7 @@ export const useAppStore = create<AppState>((set, get) => {
     recommendations: [],
     activityLog: [],
     district: 'พระโขนง',
-    mode: 'confirm',
+    mode: 'heuristic',
     narration: 'กำลังเชื่อมต่อแหล่งข้อมูล…',
     storm: false,
     stormT: 0,
@@ -315,8 +331,14 @@ export const useAppStore = create<AppState>((set, get) => {
           pumping: false,
           status: 'ok',
           rain3h: rainRes.perStation[s.id] ?? 0,
+          laserDepth_m: 0,
+          freeboard_m: 0,
+          metar: '',
         }
         st.status = statusOf(st)
+        st.laserDepth_m = laserDepth(st)
+        st.freeboard_m = freeboard(st)
+        st.metar = stationMetar(st, tideRes)
         return st
       })
       set({
@@ -385,10 +407,17 @@ export const useAppStore = create<AppState>((set, get) => {
       set({ mode })
       set((s) => ({
         activityLog: [
-          log(mode === 'semi' ? 'สลับเป็นโหมดกึ่งอัตโนมัติ — ระบบดำเนินการตามคำแนะนำที่ชัดเจนได้เอง' : 'สลับเป็นโหมดแนะนำ–ยืนยัน — ทุกคำสั่งต้องได้รับอนุมัติ', 'system'),
+          log(
+            mode === 'manual'
+              ? '🕹️ สลับเป็นโหมดควบคุมด้วยมือ — ปิดตัวช่วย AI ปั๊ม/ประตูทำงานเมื่อกดสั่งเท่านั้น (สำหรับซ่อมบำรุง/ทดสอบ/เซ็นเซอร์ผิดพลาด)'
+              : '🤖 สลับเป็นโหมดฮิวริสติก (AI) — ระบบเสนอแผนระบายน้ำแบบประสานงาน เจ้าหน้าที่เป็นผู้อนุมัติทุกคำสั่ง',
+            'system',
+          ),
           ...s.activityLog,
         ],
       }))
+      // Switching to manual clears any standing plan; switching back regenerates it.
+      refreshRecommendations()
     },
 
     approve: (recId) => {
@@ -396,6 +425,20 @@ export const useAppStore = create<AppState>((set, get) => {
       if (rec) execute(rec.stationId, rec.action)
     },
     commandStation: (stationId) => execute(stationId, 'pump'),
+    stopStation: (stationId) => {
+      const { stations, activityLog } = get()
+      const st = stations.find((s) => s.id === stationId)
+      if (!st || !st.pumping) return
+      const next = stations.map((s) =>
+        s.id === stationId ? { ...s, pumping: false, status: statusOf({ ...s, pumping: false }) } : s,
+      )
+      const verb = st.type === 'floodgate' ? 'ปิดประตูระบายน้ำ' : 'หยุดสูบน้ำ'
+      set({
+        stations: next,
+        activityLog: [log(`⏹ สั่งการโดยเจ้าหน้าที่: ${verb} — ${st.name}`), ...activityLog].slice(0, 40),
+      })
+      refreshRecommendations()
+    },
     selectStation: (stationId) => set({ selectedStationId: stationId }),
 
     equalizeNetwork: () => {
