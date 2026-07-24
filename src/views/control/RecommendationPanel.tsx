@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import CollapsiblePanel from '../../components/CollapsiblePanel'
 
@@ -8,10 +8,15 @@ const ACTION_META = {
   wait: { label: 'รอ & เฝ้าระวัง', cls: 'text-hud-amber border-hud-amber/40 bg-hud-amber/10' },
 } as const
 
+/** Primary left-rail panel: the AI plan in heuristic mode, a bare-hands console in manual mode. */
 export default function RecommendationPanel() {
+  const mode = useAppStore((s) => s.mode)
+  return mode === 'manual' ? <ManualConsole /> : <HeuristicPlan />
+}
+
+function HeuristicPlan() {
   const recommendations = useAppStore((s) => s.recommendations)
   const approve = useAppStore((s) => s.approve)
-  const mode = useAppStore((s) => s.mode)
   const [expanded, setExpanded] = useState<string | null>(null)
 
   return (
@@ -31,7 +36,7 @@ export default function RecommendationPanel() {
       }
       actions={
         <span className="hidden font-sans text-[10px] uppercase tracking-widest text-hud-dim sm:inline">
-          heuristic v1 · {mode === 'semi' ? 'กึ่งอัตโนมัติ' : 'รออนุมัติ'}
+          heuristic v1 · รออนุมัติ
         </span>
       }
       bodyClassName="space-y-2 max-h-[18rem] overflow-y-auto panel-scroll"
@@ -86,6 +91,100 @@ export default function RecommendationPanel() {
           </article>
         )
       })}
+    </CollapsiblePanel>
+  )
+}
+
+/**
+ * Manual mode console — the AI planner is off. Every pump/gate runs ONLY when a
+ * person presses it here. This is the surface for maintenance, testing new
+ * equipment, and running the network by hand when a sensor is faulty and the
+ * automatic reading can't be trusted.
+ */
+function ManualConsole() {
+  const stations = useAppStore((s) => s.stations)
+  const commandStation = useAppStore((s) => s.commandStation)
+  const stopStation = useAppStore((s) => s.stopStation)
+  const selectStation = useAppStore((s) => s.selectStation)
+  const [q, setQ] = useState('')
+
+  const sorted = useMemo(() => {
+    const list = [...stations].sort((a, b) => Number(b.pumping) - Number(a.pumping) || b.level - a.level)
+    if (!q.trim()) return list.slice(0, 60)
+    const needle = q.trim().toLowerCase()
+    return list.filter((s) => s.name.toLowerCase().includes(needle) || s.district.toLowerCase().includes(needle)).slice(0, 80)
+  }, [stations, q])
+
+  const pumping = stations.filter((s) => s.pumping).length
+
+  return (
+    <CollapsiblePanel
+      id="manual-console"
+      icon="🕹️"
+      title="แผงควบคุมด้วยมือ"
+      defaultOpen
+      mobileDefaultOpen={false}
+      className="lg:max-h-[24rem]"
+      badge={
+        pumping > 0 && (
+          <span className="rounded-full bg-hud-cyan/15 px-1.5 py-0.5 text-[10px] font-bold text-hud-cyan">{pumping}</span>
+        )
+      }
+      actions={<span className="hidden font-sans text-[10px] uppercase tracking-widest text-hud-dim sm:inline">manual</span>}
+      bodyClassName="space-y-2 max-h-[20rem] overflow-y-auto panel-scroll"
+    >
+      <div className="rounded-lg border border-hud-amber/40 bg-hud-amber/10 px-2.5 py-2 text-[11px] leading-4 text-hud-amber">
+        🕹️ โหมดควบคุมด้วยมือ — ปิดตัวช่วย AI ปั๊ม/ประตูจะทำงาน<b>เมื่อกดสั่งเท่านั้น</b>
+        <div className="mt-1 text-hud-amber/80">ใช้ตอนซ่อมบำรุง · ทดสอบอุปกรณ์ใหม่ · หรือเมื่อเซ็นเซอร์เสีย/ค่าน้ำผิดเพี้ยน</div>
+      </div>
+
+      <input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="ค้นหาสถานี / เขต…"
+        className="w-full rounded-lg border border-hud-edge bg-black/30 px-3 py-2 text-xs text-hud-text placeholder:text-hud-dim focus:border-hud-cyan/50 focus:outline-none"
+      />
+
+      <ul className="space-y-1.5">
+        {sorted.length === 0 && <li className="px-2 py-4 text-center text-xs text-hud-dim">ไม่พบสถานีที่ค้นหา</li>}
+        {sorted.map((s) => (
+          <li key={s.id} className="rounded-lg border border-hud-edge bg-black/25 p-2">
+            <button onClick={() => selectStation(s.id)} className="block w-full text-left">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="truncate text-xs font-semibold text-hud-text">{s.name}</span>
+                <span
+                  className={`data-value shrink-0 text-xs ${
+                    s.pumping ? 'text-hud-cyan' : s.level > 85 ? 'text-hud-coral' : s.level > 65 ? 'text-hud-amber' : 'text-hud-dim'
+                  }`}
+                >
+                  {s.pumping ? '💧 ' : ''}
+                  {s.level.toFixed(0)}%
+                </span>
+              </div>
+              <div className="label-tech mt-0.5 truncate">
+                เขต{s.district} · เหลือถึงตลิ่ง {s.freeboard_m.toFixed(2)} ม.
+              </div>
+            </button>
+            <div className="mt-2">
+              {s.pumping ? (
+                <button
+                  onClick={() => stopStation(s.id)}
+                  className="w-full rounded-md border border-hud-coral/50 bg-hud-coral/10 px-2.5 py-1.5 text-xs font-bold text-hud-coral transition hover:bg-hud-coral/20"
+                >
+                  ⏹ {s.type === 'floodgate' ? 'ปิดประตู' : 'หยุดสูบ'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => commandStation(s.id)}
+                  className="w-full rounded-md bg-hud-cyan px-2.5 py-1.5 text-xs font-bold text-slate-900 transition hover:brightness-110"
+                >
+                  {s.type === 'floodgate' ? '🚪 เปิดประตูระบายน้ำ' : '💧 สั่งสูบน้ำ'}
+                </button>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
     </CollapsiblePanel>
   )
 }

@@ -50,7 +50,6 @@ export default function Footer({ mapRef }: { mapRef: React.RefObject<L.Map> }) {
   const feeds = useAppStore((s) => s.feeds);
   const stations = useAppStore((s) => s.stations);
   const mode = useAppStore((s) => s.mode);
-  const setMode = useAppStore((s) => s.setMode);
   const storm = useAppStore((s) => s.storm);
   const activityLog = useAppStore((s) => s.activityLog);
   const selectStation = useAppStore((s) => s.selectStation);
@@ -86,19 +85,14 @@ export default function Footer({ mapRef }: { mapRef: React.RefObject<L.Map> }) {
         tone={networkLoad > 70 ? "coral" : networkLoad > 0 ? "amber" : "cyan"}
       />
 
-      <div className="ml-auto flex items-center gap-1.5">
-        <button
-          onClick={() => setMode(mode === "confirm" ? "semi" : "confirm")}
-          aria-pressed={mode === "confirm"}
-          className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
-            mode === "confirm"
-              ? "border-hud-cyan/50 bg-hud-cyan/15 text-hud-cyan"
-              : "border-hud-edge text-hud-dim hover:text-hud-text"
-          }`}
-          title="สลับเป็นโหมดยืนยันด้วยตนเองทุกคำสั่ง"
-        >
-          🕹️ Manual Override
-        </button>
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+        <span className="hidden items-center gap-1.5 rounded-full border border-hud-edge bg-black/20 px-2.5 py-1 text-xs font-bold sm:inline-flex">
+          {mode === "manual" ? (
+            <span className="text-hud-amber">🕹️ โหมดควบคุมด้วยมือ</span>
+          ) : (
+            <span className="text-hud-cyan">🤖 โหมดฮิวริสติก (AI)</span>
+          )}
+        </span>
 
         <div className="relative">
           <button

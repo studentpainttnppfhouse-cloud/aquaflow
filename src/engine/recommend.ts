@@ -51,8 +51,12 @@ export function recommend({ stations, tide }: EngineInput): Recommendation[] {
     .filter((s) => !s.pumping)
     .map((s) => {
       const projected = clamp(s.level + s.rain3h * MM_TO_LEVEL, 0, 130)
-      // urgency: projected overflow + how fast it's getting there + asset size
-      const score = projected + s.rain3h * 1.5 + s.capacity_cms / 20
+      // Physical headroom from the laser depth sensor: a shallow canal with
+      // little freeboard tops out sooner than a deep tunnel at the same %.
+      const freeboardM = s.freeboard_m ?? s.bedDepth_m * (1 - s.level / 100)
+      const tightFreeboard = clamp((1 - freeboardM) * 12, 0, 14) // <1 m headroom → urgent
+      // urgency: projected overflow + how fast it's getting there + asset size + tight headroom
+      const score = projected + s.rain3h * 1.5 + s.capacity_cms / 20 + tightFreeboard
       return { s, projected, score }
     })
     .filter(({ s, projected }) => projected > WATCH_LEVEL || s.level > WATCH_LEVEL)
@@ -72,6 +76,7 @@ export function recommend({ stations, tide }: EngineInput): Recommendation[] {
       s.rain3h >= 1
         ? `คาดฝน ${s.rain3h.toFixed(0)} มม. ใน 3 ชม. → ระดับน้ำจะขึ้นไปแตะ ~${projected.toFixed(0)}%`
         : 'ฝนระยะสั้นน้อย'
+    const depthTxt = `เลเซอร์วัดน้ำลึก ${s.laserDepth_m.toFixed(2)}/${s.bedDepth_m.toFixed(2)} ม. · เหลือระยะถึงตลิ่ง ${s.freeboard_m.toFixed(2)} ม.`
 
     if (drainsToRiver && !headroom) {
       // High rising tide: pumping now pushes water against a full river.
@@ -106,7 +111,7 @@ export function recommend({ stations, tide }: EngineInput): Recommendation[] {
       stationId: s.id,
       stationName: s.name,
       action: actionLabel(s),
-      reason: `ระดับน้ำ ${s.level.toFixed(0)}% ของความจุ · ${rainTxt} · ${tideTxt} → ${verb}ได้ผลสูงสุด (กำลังระบาย ${s.capacity_cms} ลบ.ม./วินาที)`,
+      reason: `ระดับน้ำ ${s.level.toFixed(0)}% ของความจุ · ${depthTxt} · ${rainTxt} · ${tideTxt} → ${verb}ได้ผลสูงสุด (กำลังระบาย ${s.capacity_cms} ลบ.ม./วินาที)`,
       riskReduction,
       score,
     })

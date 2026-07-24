@@ -27,17 +27,55 @@ import { buildZones, zoneReach } from '../data/zones'
 import { SEVERITY_META, draftMessage, sendAlert, severityFromRisk } from '../engine/alerting'
 import { recommend } from '../engine/recommend'
 import { buildAreas, dischargeVerdict } from '../engine/risk'
+import { freeboard, laserDepth, stationMetar } from '../lib/metar'
 import { clamp, fmtTime, hash01, prefersReducedMotion, uid } from '../lib/util'
 
 export type View = 'landing' | 'guide-control' | 'guide-citizen' | 'control' | 'citizen'
-/** confirm = every action needs approval · semi = pre-authorised clear-cut actions · auto = self-balancing equalizer */
-export type OpsMode = 'confirm' | 'semi' | 'auto'
+/**
+ * Two operating postures (the AI auto-run mode was removed — the system never
+ * fires a pump without a human approving it):
+ *  · `manual`    — pure human control. Pumps/gates run ONLY when a person clicks.
+ *                  The heuristic planner is off. For maintenance, testing new
+ *                  equipment, or when a sensor is faulty and the data can't be
+ *                  trusted (low-confidence situations).
+ *  · `heuristic` — the AI planner reads the network and proposes a coordinated,
+ *                  tide-aware plan; a human still approves every action (per
+ *                  station or per area) before anything runs.
+ */
+export type OpsMode = 'manual' | 'heuristic'
+export type StormPhase = 'idle' | 'building' | 'peak' | 'receding' | 'clearing'
 
 const SIM_TICK_MS = 3000
 /** Easing rate constant — displayed values close ~90% of the gap to target in ~1 s, fully settling over ~2 s. */
 const EASE_K = 2.2
 /** Don't re-warn about the same district more often than this. */
 const WARN_COOLDOWN_MS = 45_000
+
+// ── Storm scenario (bounded time-lapse) ────────────────────────────────────
+// A simulated storm is NOT endless rain: it is a fixed ~3-hour event compressed
+// into a fast time-lapse. STORM_STEPS ticks carry it from t=0 → t=1, each tick
+// advancing the virtual clock by (STORM_MINUTES / STORM_STEPS) minutes. Rain
+// follows a narrative arc — chill onset, a sustained climax, then a long taper
+// to zero — so the operator sees levels surge toward danger, then the inflow
+// stop on its own, exactly the "water rushes in, then equalizes" shape.
+const STORM_STEPS = 22
+const STORM_MINUTES = 180
+
+/** 0→1 storm progress → rainfall multiplier (0..1): fast onset, sustained peak, long taper. */
+function stormIntensity(t: number): number {
+  if (t <= 0 || t >= 1) return 0
+  const rise = Math.min(1, t / 0.18) // ramp up over the first ~18%
+  const fall = t < 0.45 ? 1 : Math.max(0, 1 - (t - 0.45) / 0.55) // taper from 45% → 100%
+  return rise * fall
+}
+
+function stormPhaseOf(t: number): StormPhase {
+  if (t <= 0 || t >= 1) return 'idle'
+  if (t < 0.18) return 'building'
+  if (t < 0.45) return 'peak'
+  if (t < 0.85) return 'receding'
+  return 'clearing'
+}
 
 interface AppState {
   ready: boolean
@@ -60,6 +98,11 @@ interface AppState {
   mode: OpsMode
   narration: string
   storm: boolean
+  /** Storm progress 0→1 through the bounded time-lapse event. */
+  stormT: number
+  /** Simulated minutes elapsed within the storm event (0..STORM_MINUTES). */
+  stormMinutes: number
+  stormPhase: StormPhase
   feeds: { rain: Provenance; water: Provenance; tide: Provenance; stations: DataFeed }
   /** Track A · LIVE — the unified provenance-tagged readings, keyed by config source id. */
   sources: Partial<Record<string, Reading<unknown>>>
@@ -83,7 +126,11 @@ interface AppState {
   setAreaSort: (s: AppState['areaSort']) => void
   approve: (recId: string) => void
   commandStation: (stationId: string) => void
+  /** Manual stop — halt a running pump/gate (maintenance, testing, faulty sensor). */
+  stopStation: (stationId: string) => void
   selectStation: (stationId: string | null) => void
+  /** One-tap coordinated response: drain/open every over-threshold station at once to equalize the network. */
+  equalizeNetwork: () => void
   openPlanner: (stationId: string | null) => void
   activateArea: (district: string) => void
   deactivateArea: (district: string) => void
@@ -99,6 +146,9 @@ interface AppState {
   setOnline: (online: boolean) => void
   setA11yLarge: (large: boolean) => void
 }
+
+/** Level at or below which a station is already balanced and left alone by equalizeNetwork. */
+const SAFE_FLOOR = 45
 
 function log(text: string, kind: LogEntry['kind'] = 'action'): LogEntry {
   return { id: uid('log'), time: fmtTime(new Date()), text, kind }
@@ -142,8 +192,9 @@ export const useAppStore = create<AppState>((set, get) => {
   // ── engine helpers ─────────────────────────────────────────────────────────
 
   const refreshRecommendations = () => {
-    const { stations, tide } = get()
-    set({ recommendations: recommend({ stations, tide }) })
+    const { stations, tide, mode } = get()
+    // Manual mode is pure human control — the AI planner is off and proposes nothing.
+    set({ recommendations: mode === 'manual' ? [] : recommend({ stations, tide }) })
   }
 
   const rebuildAreas = () => {
@@ -159,7 +210,7 @@ export const useAppStore = create<AppState>((set, get) => {
     const next = stations.map((s) =>
       s.id === stationId ? { ...s, pumping: true, status: 'pumping' as const } : s,
     )
-    const entry = log(`${auto ? '🤖 อัตโนมัติ: ' : '✅ อนุมัติ: '}${verb} — ${st.name} (${st.capacity_cms} ลบ.ม./ว.)`)
+    const entry = log(`${auto ? '🤖 แผนที่อนุมัติแล้ว: ' : '✅ สั่งการโดยเจ้าหน้าที่: '}${verb} — ${st.name} (${st.capacity_cms} ลบ.ม./ว.)`)
     set({
       stations: next,
       activityLog: [entry, ...activityLog].slice(0, 60),
@@ -231,9 +282,28 @@ export const useAppStore = create<AppState>((set, get) => {
     const { rain, storm, tide } = state
     let anyStopped: string | null = null
 
+    // Advance the bounded storm clock. The event runs its narrative arc and then
+    // clears itself — rain is never open-ended.
+    let stormT = state.stormT
+    let stormActive = storm
+    let stormEnded = false
+    if (storm) {
+      stormT = Math.min(1, stormT + 1 / STORM_STEPS)
+      if (stormT >= 1) {
+        stormActive = false
+        stormEnded = true
+      }
+    }
+    const intensity = stormActive ? stormIntensity(stormT) : 0
+    const stormMinutes = Math.round(stormT * STORM_MINUTES)
+    const stormPhase = stormActive ? stormPhaseOf(stormT) : 'idle'
+
     const stations = state.stations.map((s) => {
-      const mm3h = storm ? 25 + hash01(s.id) * 15 : rain.perStation[s.id] ?? 0
-      const inflow = mm3h * 0.045 + 0.05
+      // Storm rainfall follows the intensity curve (peaks at the climax, tapers to 0);
+      // outside a storm we use the real per-station forecast.
+      const mm3h = stormActive ? intensity * (26 + hash01(s.id) * 18) : rain.perStation[s.id] ?? 0
+      // inflow: rain accumulates; a light base seepage keeps the sim alive
+      const inflow = mm3h * 0.05 + 0.05
       let target = s.targetLevel + inflow
       let pumping = s.pumping
       if (pumping) {
@@ -252,57 +322,72 @@ export const useAppStore = create<AppState>((set, get) => {
         trend: +(((target - s.targetLevel) / (SIM_TICK_MS / 1000)) * 60).toFixed(1),
       }
       next.status = statusOf(next)
+      // Refresh the physical depth readings + the coded METAR line the AI ingests.
+      next.laserDepth_m = laserDepth(next)
+      next.freeboard_m = freeboard(next)
+      next.metar = stationMetar(next, tide)
       return next
     })
 
-    const rainCity = storm ? 32 : next3hMm(rain.hours)
+    const rainCity = stormActive ? intensity * 34 : next3hMm(rain.hours)
     const targetRisk = computeTargetRisk(stations, rainCity, tide)
 
-    const patch: Partial<AppState> = { stations, targetRisk }
+    const patch: Partial<AppState> = {
+      stations,
+      targetRisk,
+      storm: stormActive,
+      stormT,
+      stormMinutes,
+      stormPhase,
+    }
+    const logs: LogEntry[] = []
     if (anyStopped) {
-      patch.activityLog = [
-        log(`⏹ ${anyStopped} ระบายถึงระดับปลอดภัยแล้ว หยุดสูบอัตโนมัติ`, 'system'),
-        ...state.activityLog,
-      ].slice(0, 60)
+      logs.push(log(`⏹ ${anyStopped} ระบายถึงระดับปลอดภัยแล้ว หยุดสูบอัตโนมัติ`, 'system'))
+    }
+    if (stormEnded) {
+      logs.push(log('🌤️ พายุฝนจำลองเคลื่อนผ่านแล้ว (ครบ 3 ชม.) — ฝนหยุดตก เข้าสู่ช่วงระบายน้ำ', 'system'))
+    }
+    if (logs.length) {
+      patch.activityLog = [...logs, ...state.activityLog].slice(0, 60)
     }
 
     // narration heartbeat
     const pumping = stations.filter((s) => s.pumping).length
     const atRisk = stations.filter((s) => s.status === 'risk').length
-    if (pumping > 0) {
+    if (stormActive) {
+      const phaseTxt =
+        stormPhase === 'building'
+          ? 'ฝนเริ่มตก'
+          : stormPhase === 'peak'
+            ? 'ฝนตกหนักสุด'
+            : stormPhase === 'receding'
+              ? 'ฝนเริ่มซา'
+              : 'ฝนใกล้หยุด'
+      patch.narration = `⛈️ ไทม์แลปส์พายุ ชั่วโมงที่ ${(stormMinutes / 60).toFixed(1)}/3.0 · ${phaseTxt} · ${atRisk} สถานีแตะระดับเสี่ยง${pumping > 0 ? ` · ระบาย ${pumping} จุด` : ' — กด “ปรับสมดุลน้ำ” เพื่อระบายทั้งเครือข่าย'}`
+    } else if (pumping > 0) {
       patch.narration = `🔻 กำลังระบายน้ำ ${pumping} จุด · ความเสี่ยงเมือง ${state.cityRisk.toFixed(0)}% และกำลังลดลง`
-    } else if (storm) {
-      patch.narration = `⛈️ พายุฝนปกคลุมพื้นที่ · ${atRisk} สถานีแตะระดับเสี่ยง — รอการอนุมัติแผนระบาย`
     } else if (atRisk > 0) {
       patch.narration = `⚠️ ${atRisk} สถานีอยู่ในระดับเฝ้าระวังสูง · น้ำทะเล${tide.phase === 'falling' ? 'กำลังลง เหมาะแก่การสูบ' : 'กำลังขึ้น'}`
     } else {
       patch.narration = `🟢 ระบบปกติ · เฝ้าระวัง ${stations.length} สถานี · น้ำทะเล ${tide.height.toFixed(2)} ม. (${tide.phase === 'falling' ? 'ลง' : 'ขึ้น'})`
     }
-    set(patch)
-    refreshRecommendations()
     rebuildAreas()
 
     const after = get()
 
-    // ── continuous planning: run every "active" area's plan automatically ─────
-    for (const area of after.areas) {
-      if (area.activation === 'active' && area.actionable > 0) {
-        const ids = after.stations
-          .filter((s) => s.district === area.district && !s.pumping)
-          .map((s) => s.id)
-        executePlan(ids, true)
+    // ── continuous planning: keep running each area whose plan a human already
+    //    APPROVED (activation === 'active'). There is no un-approved auto-dispatch:
+    //    the system never fires a pump the operator didn't approve, and in manual
+    //    mode nothing here runs at all.
+    if (after.mode === 'heuristic') {
+      for (const area of after.areas) {
+        if (area.activation === 'active' && area.actionable > 0) {
+          const ids = after.stations
+            .filter((s) => s.district === area.district && !s.pumping)
+            .map((s) => s.id)
+          executePlan(ids, true)
+        }
       }
-    }
-
-    // ── auto mode: self-balancing equalizer across the whole network ──────────
-    if (after.mode === 'auto') {
-      const ids = get()
-        .stations.filter((s) => !s.pumping && (s.level > 60 || s.level + s.rain3h * 0.8 > 66))
-        .map((s) => s.id)
-      executePlan(ids, true)
-    } else if (after.mode === 'semi') {
-      const top = after.recommendations.find((r) => r.action !== 'wait' && r.score > 80)
-      if (top) execute(top.stationId, top.action, true)
     }
 
     // ── active notifications: warn about areas about to flood ─────────────────
@@ -313,7 +398,7 @@ export const useAppStore = create<AppState>((set, get) => {
   /** Push a flood-soon warning for any un-handled area whose plan is idle, throttled per district. */
   const emitFloodWarnings = () => {
     const s = get()
-    if (s.mode === 'auto') return // auto mode handles it silently
+    if (s.mode === 'manual') return // manual mode is hands-on — no AI plan notifications
     const now = Date.now()
     for (const area of s.areas) {
       const brewing = area.projected > 80 || area.maxLevel > 84 || area.atRisk > 0
@@ -357,6 +442,8 @@ export const useAppStore = create<AppState>((set, get) => {
           dirty = true
           const next = { ...st, level }
           next.status = statusOf(next)
+          next.laserDepth_m = laserDepth(next)
+          next.freeboard_m = freeboard(next)
           return next
         }
         return st
@@ -383,9 +470,12 @@ export const useAppStore = create<AppState>((set, get) => {
     activation: {},
     activityLog: [],
     district: 'พระโขนง',
-    mode: 'confirm',
+    mode: 'heuristic',
     narration: 'กำลังเชื่อมต่อแหล่งข้อมูล…',
     storm: false,
+    stormT: 0,
+    stormMinutes: 0,
+    stormPhase: 'idle',
     feeds: { rain: 'sim', water: 'sim', tide: 'sim', stations: 'cached' },
     sources: {},
     zones: {},
@@ -420,8 +510,14 @@ export const useAppStore = create<AppState>((set, get) => {
           pumping: false,
           status: 'ok',
           rain3h: rainRes.perStation[s.id] ?? 0,
+          laserDepth_m: 0,
+          freeboard_m: 0,
+          metar: '',
         }
         st.status = statusOf(st)
+        st.laserDepth_m = laserDepth(st)
+        st.freeboard_m = freeboard(st)
+        st.metar = stationMetar(st, tideRes)
         return st
       })
       const districts = [...new Set(stations.map((s) => s.district))]
@@ -500,13 +596,20 @@ export const useAppStore = create<AppState>((set, get) => {
     setAreaSort: (areaSort) => set({ areaSort }),
     setMode: (mode) => {
       set({ mode })
-      const label =
-        mode === 'auto'
-          ? 'สลับเป็นโหมดอัตโนมัติเต็มรูปแบบ — ระบบปรับสมดุลและระบายน้ำเองเพื่อคุมความเสี่ยงให้ต่ำ'
-          : mode === 'semi'
-            ? 'สลับเป็นโหมดกึ่งอัตโนมัติ — ระบบดำเนินการตามคำแนะนำที่ชัดเจนได้เอง'
-            : 'สลับเป็นโหมดแนะนำ–ยืนยัน — ทุกคำสั่งต้องได้รับอนุมัติ'
-      set((s) => ({ activityLog: [log(label, 'system'), ...s.activityLog].slice(0, 60) }))
+      set((s) => ({
+        activityLog: [
+          log(
+            mode === 'manual'
+              ? '🕹️ สลับเป็นโหมดควบคุมด้วยมือ — ปิดตัวช่วย AI ปั๊ม/ประตูทำงานเมื่อกดสั่งเท่านั้น (สำหรับซ่อมบำรุง/ทดสอบ/เซ็นเซอร์ผิดพลาด)'
+              : '🤖 สลับเป็นโหมดฮิวริสติก (AI) — ระบบเสนอแผนระบายน้ำแบบประสานงาน เจ้าหน้าที่เป็นผู้อนุมัติทุกคำสั่ง',
+            'system',
+          ),
+          ...s.activityLog,
+        ].slice(0, 60),
+      }))
+      // Switching to manual clears any standing plan; switching back regenerates it.
+      refreshRecommendations()
+      rebuildAreas()
     },
 
     approve: (recId) => {
@@ -521,30 +624,42 @@ export const useAppStore = create<AppState>((set, get) => {
       refreshRecommendations()
       rebuildAreas()
     },
+    stopStation: (stationId) => {
+      const { stations, activityLog } = get()
+      const st = stations.find((s) => s.id === stationId)
+      if (!st || !st.pumping) return
+      const next = stations.map((s) =>
+        s.id === stationId ? { ...s, pumping: false, status: statusOf({ ...s, pumping: false }) } : s,
+      )
+      const verb = st.type === 'floodgate' ? 'ปิดประตูระบายน้ำ' : 'หยุดสูบน้ำ'
+      set({
+        stations: next,
+        activityLog: [log(`⏹ สั่งการโดยเจ้าหน้าที่: ${verb} — ${st.name}`), ...activityLog].slice(0, 60),
+      })
+      refreshRecommendations()
+      rebuildAreas()
+    },
     selectStation: (stationId) => set({ selectedStationId: stationId }),
     openPlanner: (plannerStationId) => set({ plannerStationId }),
 
     activateArea: (district) => {
       const { mode, stations, tide } = get()
+      // Manual mode has no AI area plans — ignore.
+      if (mode === 'manual') return
       const ids = stations
         .filter((s) => s.district === district && !s.pumping && dischargeVerdict(s, stations, tide).ok)
         .map((s) => s.id)
-      if (mode === 'auto') {
-        // auto mode needs no human approval
-        set((s) => ({ activation: { ...s.activation, [district]: 'active' } }))
-        executePlan(ids, true)
-        set((s) => ({ activityLog: [log(`🤖 เปิดใช้งานแผนอัตโนมัติ เขต${district}`, 'system'), ...s.activityLog].slice(0, 60) }))
-      } else {
-        set((s) => ({ activation: { ...s.activation, [district]: 'pending' } }))
-        pushNotification({
-          kind: 'approval',
-          district,
-          title: `🔐 ขออนุมัติเปิดใช้งานแผน เขต${district}`,
-          body: `แผนจะสั่งระบายน้ำ ${ids.length} สถานีในเขต${district} โดยจัดคิวตามโหนดปลายน้ำและรอบน้ำทะเล — อนุมัติเพื่อเริ่ม`,
-          stationIds: ids,
-          riskReduction: Math.round(clamp(ids.length * 1.5, 2, 18)),
-        })
-      }
+      // Always human-approved: activating an area raises an approval request; the
+      // plan only runs once the operator approves it (no un-approved auto-run).
+      set((s) => ({ activation: { ...s.activation, [district]: 'pending' } }))
+      pushNotification({
+        kind: 'approval',
+        district,
+        title: `🔐 ขออนุมัติเปิดใช้งานแผน เขต${district}`,
+        body: `แผนจะสั่งระบายน้ำ ${ids.length} สถานีในเขต${district} โดยจัดคิวตามโหนดปลายน้ำและรอบน้ำทะเล — อนุมัติเพื่อเริ่ม`,
+        stationIds: ids,
+        riskReduction: Math.round(clamp(ids.length * 1.5, 2, 18)),
+      })
       rebuildAreas()
     },
     deactivateArea: (district) => {
@@ -593,13 +708,38 @@ export const useAppStore = create<AppState>((set, get) => {
       rebuildAreas()
     },
 
+    equalizeNetwork: () => {
+      const { stations, activityLog, cityRisk } = get()
+      const targets = stations.filter((s) => !s.pumping && s.level > SAFE_FLOOR)
+      if (!targets.length) {
+        set({ narration: '✅ เครือข่ายอยู่ในสมดุลแล้ว — ไม่มีจุดที่ต้องระบายเพิ่ม' })
+        return
+      }
+      const ids = new Set(targets.map((s) => s.id))
+      const next = stations.map((s) =>
+        ids.has(s.id) ? { ...s, pumping: true, status: 'pumping' as const } : s,
+      )
+      set({
+        stations: next,
+        narration: `⚡ ปรับสมดุลน้ำทั้งเครือข่าย · สั่งระบาย ${targets.length} จุดพร้อมกัน · ความเสี่ยงเมือง ${cityRisk.toFixed(0)}% กำลังลดลง`,
+        activityLog: [
+          log(`⚡ ปรับสมดุลเครือข่าย: เปิดระบาย/สูบน้ำพร้อมกัน ${targets.length} จุด — ดึงระดับน้ำทุกพื้นที่เข้าสู่ระดับปลอดภัย`),
+          ...activityLog,
+        ].slice(0, 40),
+      })
+      refreshRecommendations()
+    },
+
     simulateStorm: () => {
       if (get().storm) return
       set((s) => ({
         storm: true,
-        narration: '⛈️ ตรวจพบพายุฝนกำลังแรงเคลื่อนเข้าปกคลุมกรุงเทพฯ — ระดับน้ำทุกคลองกำลังขึ้นเร็ว',
+        stormT: 0,
+        stormMinutes: 0,
+        stormPhase: 'building',
+        narration: '⛈️ เริ่มไทม์แลปส์พายุฝน 3 ชม. — ฝนกำลังเริ่มตก ระดับน้ำจะไต่ขึ้นเข้าสู่จุดวิกฤต แล้วจึงซาลง',
         activityLog: [
-          log('⛈️ สถานการณ์จำลอง: พายุฝน 30+ มม./3ชม. ปกคลุมทั้งเมือง', 'alert'),
+          log('⛈️ สถานการณ์จำลอง (ไทม์แลปส์ 3 ชม.): พายุฝนเคลื่อนเข้าปกคลุมกรุงเทพฯ', 'alert'),
           ...s.activityLog,
         ],
       }))
@@ -618,6 +758,9 @@ export const useAppStore = create<AppState>((set, get) => {
       Object.keys(warnedAt).forEach((k) => delete warnedAt[k])
       set({
         storm: false,
+        stormT: 0,
+        stormMinutes: 0,
+        stormPhase: 'idle',
         stations: levels,
         recommendations: [],
         notifications: [],

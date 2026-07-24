@@ -22,6 +22,7 @@ export default function FloatingStationCard() {
   const tide = useAppStore((s) => s.tide)
   const selectStation = useAppStore((s) => s.selectStation)
   const commandStation = useAppStore((s) => s.commandStation)
+  const stopStation = useAppStore((s) => s.stopStation)
   const openPlanner = useAppStore((s) => s.openPlanner)
 
   if (!station) return null
@@ -89,16 +90,42 @@ export default function FloatingStationCard() {
           <dt className="label-tech">ฝนคาด 3 ชม.</dt>
           <dd className="data-value mt-0.5 text-hud-text">{station.rain3h.toFixed(1)} มม.</dd>
         </div>
+        <div className="rounded-lg border border-hud-edge bg-black/20 px-2 py-1.5">
+          <dt className="label-tech">เลเซอร์วัดน้ำลึก</dt>
+          <dd className="data-value mt-0.5 text-hud-text">
+            {station.laserDepth_m.toFixed(2)}
+            <span className="text-hud-dim"> / {station.bedDepth_m.toFixed(2)} ม.</span>
+          </dd>
+        </div>
+        <div className="rounded-lg border border-hud-edge bg-black/20 px-2 py-1.5">
+          <dt className="label-tech">ระยะถึงตลิ่ง</dt>
+          <dd className={`data-value mt-0.5 ${station.freeboard_m < 1 ? 'text-hud-coral' : 'text-hud-text'}`}>
+            {station.freeboard_m.toFixed(2)} ม.
+          </dd>
+        </div>
       </dl>
 
+      <div className="mt-2 rounded-lg border border-hud-edge bg-black/30 px-2 py-1.5">
+        <dt className="label-tech">รหัสสภาพสถานี (METAR) · ป้อนเข้าโมเดล AI</dt>
+        <dd className="data-value mt-1 break-all text-[10px] leading-4 text-hud-cyan">{station.metar}</dd>
+      </div>
+
       <div className="mt-2.5 flex gap-2">
-        <button
-          onClick={() => commandStation(station.id)}
-          disabled={station.pumping}
-          className="flex-1 rounded-lg bg-hud-cyan px-3 py-1.5 text-sm font-bold text-slate-900 transition hover:brightness-110 disabled:opacity-40"
-        >
-          {station.pumping ? '💧 กำลังระบาย…' : station.type === 'floodgate' ? '🚪 เปิดประตู' : '💧 สั่งสูบ'}
-        </button>
+        {station.pumping ? (
+          <button
+            onClick={() => stopStation(station.id)}
+            className="flex-1 rounded-lg border border-hud-coral/50 bg-hud-coral/10 px-3 py-1.5 text-sm font-bold text-hud-coral transition hover:bg-hud-coral/20"
+          >
+            ⏹ {station.type === 'floodgate' ? 'ปิดประตู' : 'หยุดสูบ'}
+          </button>
+        ) : (
+          <button
+            onClick={() => commandStation(station.id)}
+            className="flex-1 rounded-lg bg-hud-cyan px-3 py-1.5 text-sm font-bold text-slate-900 transition hover:brightness-110"
+          >
+            {station.type === 'floodgate' ? '🚪 เปิดประตู' : '💧 สั่งสูบ'}
+          </button>
+        )}
         <button
           onClick={() => openPlanner(station.id)}
           className="rounded-lg border border-hud-edge px-3 py-1.5 text-sm font-semibold text-hud-text transition hover:border-hud-edgeStrong"

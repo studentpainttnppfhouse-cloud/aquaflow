@@ -98,6 +98,36 @@ seeded to a realistic Bangkok bar range) and is **labeled "จำลอง / mod
 
 Keys go in `.env` (see `.env.example`); never commit secrets.
 
+## Two operating modes
+
+The Control Center has one toggle (top conditions bar) with two honest postures —
+the old "semi/auto" modes that fired pumps on their own have been **removed**; the
+system never dispatches a pump without a human approving it.
+
+- **🕹️ Manual** — pure human control. The AI planner is off; every pump/gate runs
+  only when the operator clicks it in the manual console (search + per-station
+  start/stop). This is the mode for **maintenance, testing new equipment, or when
+  a laser/level sensor is faulty and the automatic reading can't be trusted**
+  (low-confidence situations).
+- **🤖 Heuristic** — the AI planner reads the network and proposes a coordinated,
+  tide-aware plan; the operator still approves every action.
+
+## What the AI is fed (data · model · output)
+
+Shown in-app as the **🧠 "ข้อมูลของโมเดล AI" (model card)** panel:
+
+- **Input** — canal/river levels (ThaiWater / HII, สสน.), Chao Phraya tide, per-station
+  3-h rain forecast (Open-Meteo), and **per-station laser/ultrasonic depth**: a bed
+  depth (`bedDepth_m`) turns a % level into a real water-column depth and *metres of
+  freeboard* before the bank, packed with everything else into one **METAR-style coded
+  line per station** (`src/lib/metar.ts`) — the feature vector handed to the planner.
+- **Model** — a transparent heuristic planner v1 (`src/engine/recommend.ts`), non-ML and
+  ML/RL-replaceable behind the same `recommend()` interface, informed by past events
+  (2011 / พ.ศ. 2554 great flood, 2025 / พ.ศ. 2568 southern floods), BMA pumping logs,
+  and published research.
+- **Output** — a ranked, staggered drainage plan (pump / open gate / wait) with a reason
+  and estimated city-risk reduction per action, plus the one-tap "equalize network".
+
 ## Data layer — two tracks
 
 The data layer is split into two clearly separated tracks.
@@ -148,9 +178,10 @@ npm run learn:calibrate  # write learn/artifacts/calibration.json
 - **The "AI" is a transparent heuristic planner** (`src/engine/recommend.ts`), not a
   trained model — a deliberate stand-in shaped so an ML/RL policy can replace it
   behind the same `recommend()` interface. It is tide-aware (pump while the river
-  is falling), inflow-aware (per-station Open-Meteo forecast), and coordinated
-  (never recommends every station discharging into the same downstream node —
-  the anti-"move-the-flood-elsewhere" rule staggers them).
+  is falling), inflow-aware (per-station Open-Meteo forecast), depth-aware (laser
+  freeboard from `bedDepth_m`), and coordinated (never recommends every station
+  discharging into the same downstream node — the anti-"move-the-flood-elsewhere"
+  rule staggers them).
 - **Station coordinates are approximate** (`approx: true` in
   `src/data/fallback/stations.json`), seeded from public records of real
   installations; the adapter upgrades them with official open-data geometry when

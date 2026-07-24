@@ -7,7 +7,7 @@ export function StationBars() {
   const stations = useAppStore((s) => s.stations)
   const sorted = [...stations].sort((a, b) => b.level - a.level)
   return (
-    <CollapsiblePanel id="station-levels" icon="📊" title="ระดับน้ำรายสถานี" defaultOpen={false}>
+    <CollapsiblePanel id="station-levels" icon="📊" title="ระดับน้ำรายสถานี" defaultOpen={false} resizable>
       <ul className="space-y-1.5">
         {sorted.map((s) => (
           <li key={s.id} className="text-xs">
@@ -133,8 +133,8 @@ export function ActivityLog() {
   const activityLog = useAppStore((s) => s.activityLog)
   const kindCls = { action: 'text-hud-cyan', system: 'text-hud-dim', alert: 'text-hud-amber' } as const
   return (
-    <CollapsiblePanel id="activity-log" icon="📜" title="บันทึกการปฏิบัติการ" defaultOpen mobileDefaultOpen={false} className="lg:max-h-[16rem]">
-      <ul className="max-h-48 space-y-1 overflow-y-auto text-xs panel-scroll">
+    <CollapsiblePanel id="activity-log" icon="📜" title="บันทึกการปฏิบัติการ" defaultOpen mobileDefaultOpen={false} resizable>
+      <ul className="space-y-1 text-xs">
         {activityLog.length === 0 && <li className="p-2 text-hud-dim">ยังไม่มีเหตุการณ์</li>}
         {activityLog.map((e) => (
           <li key={e.id} className="flex gap-2">

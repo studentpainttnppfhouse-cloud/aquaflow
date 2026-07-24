@@ -35,7 +35,6 @@ export default function AreaPanel() {
   const areas = useAppStore((s) => s.areas)
   const sort = useAppStore((s) => s.areaSort)
   const setSort = useAppStore((s) => s.setAreaSort)
-  const mode = useAppStore((s) => s.mode)
   const activateArea = useAppStore((s) => s.activateArea)
   const deactivateArea = useAppStore((s) => s.deactivateArea)
   const activateAll = useAppStore((s) => s.activateAllAreas)
@@ -70,7 +69,7 @@ export default function AreaPanel() {
           disabled={hot === 0}
           className="rounded-md bg-hud-cyan px-2.5 py-1 text-[11px] font-bold text-slate-900 transition hover:brightness-110 disabled:opacity-40"
         >
-          {mode === 'auto' ? '⚡ ปรับสมดุลทุกเขต' : '⚡ เปิดใช้งานเขตเร่งด่วน'}
+          ⚡ ขออนุมัติเขตเร่งด่วน
         </button>
       </div>
 
@@ -139,7 +138,7 @@ export default function AreaPanel() {
                       disabled={a.actionable === 0 && a.atRisk === 0}
                       className="ml-auto rounded-md bg-hud-cyan/90 px-2.5 py-0.5 text-[10px] font-bold text-slate-900 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-30"
                     >
-                      {mode === 'auto' ? 'เปิดใช้งาน' : 'ขออนุมัติ'}
+                      ขออนุมัติ
                     </button>
                   </>
                 )}

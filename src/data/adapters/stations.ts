@@ -28,11 +28,24 @@ export interface StationsResult {
   feed: DataFeed
 }
 
+/** Nominal bed depth below the bank (the laser sensor's zero datum), by asset type. */
+const BED_DEPTH_M: Record<Station['type'], number> = { tunnel: 8.5, floodgate: 3.4, pump: 3.6 }
+
 function seed(): { stations: Station[]; canals: Canal[] } {
-  return {
-    stations: (stationsJson as unknown as { stations: Station[] }).stations,
-    canals: (canalsJson as unknown as { canals: Canal[] }).canals,
-  }
+  // Give every canal a nominal channel depth (the laser reference datum) — a
+  // river reach is deeper than a drainage khlong. Explicit depth_m in the JSON
+  // wins; otherwise fall back to a per-kind default so the AI always has one.
+  const canals = (canalsJson as unknown as { canals: Canal[] }).canals.map((c) => ({
+    ...c,
+    depth_m: c.depth_m ?? (c.kind === 'river' ? 8 : 3.5),
+  }))
+  // Same for the station laser datum: honour an explicit bedDepth_m in the seed,
+  // otherwise default by asset type so freeboard/METAR are always computable.
+  const stations = (stationsJson as unknown as { stations: Station[] }).stations.map((s) => ({
+    ...s,
+    bedDepth_m: s.bedDepth_m ?? BED_DEPTH_M[s.type] ?? 3.5,
+  }))
+  return { stations, canals }
 }
 
 export async function fetchStations(): Promise<StationsResult> {
