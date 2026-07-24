@@ -25,13 +25,13 @@ export default function ControlCenter() {
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 lg:flex-row lg:overflow-hidden">
         <section className="order-2 flex min-h-0 w-full flex-col gap-2 lg:order-1 lg:w-[18.5rem] lg:overflow-y-auto lg:panel-scroll">
           <RecommendationPanel />
-          <NodeDetail />
           <ActivityLog />
           <RainRadar />
           <StationBars />
         </section>
-        <section className="glass-panel order-1 min-h-[52vh] flex-1 overflow-hidden lg:order-2 lg:min-h-0">
+        <section className="glass-panel relative order-1 min-h-[52vh] flex-1 overflow-hidden lg:order-2 lg:min-h-0">
           <MapPanel mapRef={mapRef} />
+          <NodeDetail />
         </section>
       </div>
       <div className="shrink-0 px-2 pt-0">
@@ -80,15 +80,23 @@ function TopStatusBar() {
   )
 }
 
+const MODES: { id: 'manual' | 'heuristic' | 'auto'; label: string; hint: string }[] = [
+  { id: 'manual', label: '🕹️ Manual', hint: 'ควบคุมด้วยมือทุกจุด' },
+  { id: 'heuristic', label: '🧠 Heuristic v1', hint: 'AI เสนอแผน · เจ้าหน้าที่อนุมัติ' },
+  { id: 'auto', label: '🤖 AI Auto', hint: 'AI สั่งการ + ประกาศอัตโนมัติ' },
+]
+
 function ConditionsBar() {
-  const { rain, tide, storm, stormPhase, stormMinutes, feeds } = useAppStore((s) => ({
+  const { rain, tide, storm, stormPhase, stormMinutes, feeds, mode } = useAppStore((s) => ({
     rain: s.rain,
     tide: s.tide,
     storm: s.storm,
     stormPhase: s.stormPhase,
     stormMinutes: s.stormMinutes,
     feeds: s.feeds,
+    mode: s.mode,
   }))
+  const setMode = useAppStore((s) => s.setMode)
   const simulateStorm = useAppStore((s) => s.simulateStorm)
   const reset = useAppStore((s) => s.reset)
   const [now, setNow] = useState(new Date())
@@ -137,6 +145,29 @@ function ConditionsBar() {
       </span>
 
       <div className="ml-auto flex items-center gap-2">
+        <div
+          className="flex rounded-full border border-hud-edge bg-black/25 p-0.5 text-[11px]"
+          role="group"
+          aria-label="โหมดการทำงาน"
+        >
+          {MODES.map((m) => (
+            <button
+              key={m.id}
+              onClick={() => setMode(m.id)}
+              title={m.hint}
+              aria-pressed={mode === m.id}
+              className={`rounded-full px-2.5 py-1 font-semibold transition ${
+                mode === m.id
+                  ? m.id === 'auto'
+                    ? 'bg-hud-cyan text-slate-900'
+                    : 'bg-white/15 text-hud-text'
+                  : 'text-hud-dim hover:text-hud-text'
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
         <button
           onClick={simulateStorm}
           disabled={storm}

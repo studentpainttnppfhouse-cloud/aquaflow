@@ -84,14 +84,14 @@ export default function Footer({ mapRef }: { mapRef: React.RefObject<L.Map> }) {
 
       <div className="ml-auto flex items-center gap-1.5">
         <button
-          onClick={() => setMode(mode === "confirm" ? "semi" : "confirm")}
-          aria-pressed={mode === "confirm"}
+          onClick={() => setMode(mode === "manual" ? "heuristic" : "manual")}
+          aria-pressed={mode === "manual"}
           className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
-            mode === "confirm"
-              ? "border-hud-cyan/50 bg-hud-cyan/15 text-hud-cyan"
+            mode === "manual"
+              ? "border-hud-coral/50 bg-hud-coral/15 text-hud-coral"
               : "border-hud-edge text-hud-dim hover:text-hud-text"
           }`}
-          title="สลับเป็นโหมดยืนยันด้วยตนเองทุกคำสั่ง"
+          title="เข้าควบคุมด้วยมือทันที — หยุดการสั่งการอัตโนมัติของ AI"
         >
           🕹️ Manual Override
         </button>

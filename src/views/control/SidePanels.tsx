@@ -1,15 +1,66 @@
+import { useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import LiveBadge from '../../components/LiveBadge'
 import CollapsiblePanel from '../../components/CollapsiblePanel'
 import { next3hMm } from '../../data/adapters/openMeteo'
+import type { StationState } from '../../data/types'
+
+type SortKey = 'level' | 'risk' | 'capacity' | 'district'
+const SORTS: { id: SortKey; label: string }[] = [
+  { id: 'level', label: 'ระดับน้ำ' },
+  { id: 'risk', label: 'ความเสี่ยง' },
+  { id: 'capacity', label: 'กำลังระบาย' },
+  { id: 'district', label: 'เขต' },
+]
+const STATUS_RANK = { risk: 3, watch: 2, pumping: 1, ok: 0 } as const
+const LIMIT = 60
+
+function sortStations(stations: StationState[], key: SortKey): StationState[] {
+  const arr = [...stations]
+  switch (key) {
+    case 'risk':
+      return arr.sort((a, b) => STATUS_RANK[b.status] - STATUS_RANK[a.status] || b.level - a.level)
+    case 'capacity':
+      return arr.sort((a, b) => b.capacity_cms - a.capacity_cms)
+    case 'district':
+      return arr.sort((a, b) => a.district.localeCompare(b.district, 'th') || b.level - a.level)
+    default:
+      return arr.sort((a, b) => b.level - a.level)
+  }
+}
 
 export function StationBars() {
   const stations = useAppStore((s) => s.stations)
-  const sorted = [...stations].sort((a, b) => b.level - a.level)
+  const [sort, setSort] = useState<SortKey>('risk')
+  const sorted = sortStations(stations, sort)
+  const shown = sorted.slice(0, LIMIT)
   return (
-    <CollapsiblePanel id="station-levels" icon="📊" title="ระดับน้ำรายสถานี" defaultOpen={false}>
+    <CollapsiblePanel
+      id="station-levels"
+      icon="📊"
+      title="ระดับน้ำรายสถานี"
+      defaultOpen={false}
+      badge={
+        <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-bold text-hud-dim">{stations.length}</span>
+      }
+      actions={
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as SortKey)}
+          onClick={(e) => e.stopPropagation()}
+          aria-label="เรียงลำดับสถานี"
+          className="rounded-md border border-hud-edge bg-black/40 px-1.5 py-0.5 text-[11px] font-semibold text-hud-text outline-none focus:border-hud-cyan"
+        >
+          {SORTS.map((s) => (
+            <option key={s.id} value={s.id}>
+              เรียง: {s.label}
+            </option>
+          ))}
+        </select>
+      }
+    >
       <ul className="space-y-1.5">
-        {sorted.map((s) => (
+        {shown.map((s) => (
           <li key={s.id} className="text-xs">
             <div className="flex items-baseline justify-between gap-2">
               <span className="truncate text-hud-text/85">{s.name.replace('สถานีสูบน้ำ', 'สน.').replace('ประตูระบายน้ำ', 'ปตร.')}</span>
@@ -32,6 +83,11 @@ export function StationBars() {
           </li>
         ))}
       </ul>
+      {sorted.length > LIMIT && (
+        <p className="mt-2 text-center text-[10px] text-hud-dim">
+          แสดง {LIMIT} จาก {sorted.length} สถานี (เรียงตาม{SORTS.find((x) => x.id === sort)?.label})
+        </p>
+      )}
     </CollapsiblePanel>
   )
 }

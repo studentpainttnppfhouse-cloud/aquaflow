@@ -5,8 +5,9 @@ import HeroStatus from './HeroStatus'
 import CanalList from './CanalList'
 import Alerts from './Alerts'
 import MiniMap from './MiniMap'
+import AlertChannels from './AlertChannels'
 
-type Tab = 'home' | 'alerts' | 'about'
+type Tab = 'home' | 'alerts' | 'broadcast' | 'about'
 
 export default function CitizenApp() {
   const [tab, setTab] = useState<Tab>('home')
@@ -56,14 +57,16 @@ export default function CitizenApp() {
             </div>
           )}
           {tab === 'alerts' && <Alerts />}
+          {tab === 'broadcast' && <AlertChannels />}
           {tab === 'about' && <AboutTab />}
         </main>
 
-        <nav className="grid shrink-0 grid-cols-3 border-t border-hud-edge bg-hud-panelSolid text-center text-xs">
+        <nav className="grid shrink-0 grid-cols-4 border-t border-hud-edge bg-hud-panelSolid text-center text-[11px]">
           {(
             [
               ['home', '🏠', 'หน้าหลัก'],
               ['alerts', '🔔', 'แจ้งเตือน'],
+              ['broadcast', '📢', 'กระจายข่าว'],
               ['about', 'ℹ️', 'ข้อมูล'],
             ] as [Tab, string, string][]
           ).map(([t, icon, label]) => (
