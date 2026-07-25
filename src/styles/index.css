@@ -204,6 +204,32 @@ body {
   }
 }
 
+/* ── main-center plan notification (auto-fading) ─────────────────────── */
+.plan-alert {
+  animation: plan-alert-in 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes plan-alert-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@media (min-width: 640px) {
+  .plan-alert {
+    animation: plan-alert-in-centered 260ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes plan-alert-in-centered {
+    from {
+      opacity: 0;
+      transform: translate(-50%, 10px);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+  }
+}
+
 /* ── rain radar blobs ────────────────────────────────────────────────── */
 .radar-blob {
   position: absolute;

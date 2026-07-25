@@ -22,6 +22,21 @@ export type View = 'landing' | 'guide-control' | 'guide-citizen' | 'control' | '
 export type OpsMode = 'manual' | 'heuristic' | 'auto'
 export type StormPhase = 'idle' | 'building' | 'peak' | 'receding' | 'clearing'
 
+/**
+ * An AI-moderated notification raised to the main control center in heuristic
+ * mode. It alerts, then self-clears after a short window if staff take no action
+ * (they can let it fade to stand pat, or approve the network-wide drain in one tap).
+ */
+export interface PlanAlert {
+  id: string
+  text: string
+  /** Number of stations the plan would act on right now. */
+  actionable: number
+  /** Number of stations the one-tap network drain would open. */
+  drainable: number
+  ts: number
+}
+
 const SIM_TICK_MS = 3000
 /** Easing rate constant — displayed values close ~90% of the gap to target in ~1 s, fully settling over ~2 s. */
 const EASE_K = 2.2
@@ -77,6 +92,8 @@ interface AppState {
   feeds: { rain: DataFeed; water: DataFeed; tide: DataFeed; stations: DataFeed }
   /** Station selected on the Control Center map — drives the Node Detail rail panel. */
   selectedStationId: string | null
+  /** Heuristic-mode notification currently shown on the main center overlay (null = none). */
+  planAlert: PlanAlert | null
 
   init: () => Promise<void>
   setView: (v: View) => void
@@ -85,7 +102,11 @@ interface AppState {
   setMode: (m: OpsMode) => void
   approve: (recId: string) => void
   commandStation: (stationId: string) => void
+  /** Halt pumping/draining at one station — e.g. when a field report comes in. */
+  stopStation: (stationId: string) => void
   selectStation: (stationId: string | null) => void
+  /** Clear the current main-center plan notification (auto-fade or manual close). */
+  dismissPlanAlert: () => void
   /** One-tap coordinated response: drain/open every over-threshold station at once to equalize the network. */
   equalizeNetwork: () => void
   /** Push an emergency flood warning to residents of a district (records it in the ops log). */
@@ -114,12 +135,24 @@ function computeTargetRisk(stations: StationState[], rainCity: number, tide: Tid
   const wLevel = stations.reduce((s, x) => s + x.targetLevel * x.capacity_cms, 0) / capSum
   const tideMid = (tide.range[0] + tide.range[1]) / 2
   const tideFactor = tide.phase === 'rising' && tide.height > tideMid ? 8 : 0
-  return clamp(wLevel * 0.85 + Math.min(20, rainCity * 1.4) + tideFactor, 3, 99)
+  // Coordinated-response credit: when a large share of network capacity is
+  // actively draining, the city is measurably safer *now* (water is leaving
+  // faster than the stored levels alone imply). This makes activating the plan
+  // pull the risk number down immediately — even mid-storm — instead of only
+  // after levels have finished easing. Capped so risk never fully hides an
+  // ongoing storm.
+  const pumpCap = stations.reduce((s, x) => s + (x.pumping ? x.capacity_cms : 0), 0)
+  const pumpFrac = capSum ? pumpCap / capSum : 0
+  const drainRelief = pumpFrac * 26
+  return clamp(wLevel * 0.85 + Math.min(20, rainCity * 1.4) + tideFactor - drainRelief, 3, 99)
 }
 
 let loopsStarted = false
 /** Districts the AI-auto mode has already broadcast to this session (prevents re-announcing every tick). */
 const autoAnnounced = new Set<string>()
+/** Timestamp of the last heuristic plan notification — used as a cooldown so the alert doesn't re-fire every tick. */
+let lastPlanAlertAt = 0
+const PLAN_ALERT_COOLDOWN_MS = 18_000
 
 export const useAppStore = create<AppState>((set, get) => {
   // ── engine helpers ─────────────────────────────────────────────────────────
@@ -144,6 +177,33 @@ export const useAppStore = create<AppState>((set, get) => {
       narration: `🔻 ${st.name} กำลังระบายน้ำ · ความเสี่ยงเมืองอยู่ที่ ${cityRisk.toFixed(0)}% และกำลังลดลง`,
     })
     refreshRecommendations()
+  }
+
+  // ── heuristic notification: alert the main center to a ready plan ─────────
+  // Raised only in heuristic mode, throttled by a cooldown, and never while one
+  // is already on screen. The overlay component self-clears it after a short
+  // window so unattended alerts fade on their own ("AI moderates").
+  const maybeRaisePlanAlert = (force = false) => {
+    const st = get()
+    if (st.mode !== 'heuristic') return
+    const actionable = st.recommendations.filter((r) => r.action !== 'wait')
+    const drainable = st.stations.filter((s) => !s.pumping && s.level > SAFE_FLOOR).length
+    if (!st.storm && actionable.length === 0) return
+    const now = Date.now()
+    if (!force && (st.planAlert || now - lastPlanAlertAt < PLAN_ALERT_COOLDOWN_MS)) return
+    lastPlanAlertAt = now
+    const atRisk = st.stations.filter((s) => s.status === 'risk').length
+    const situation = st.storm
+      ? `⛈️ ไทม์แลปส์พายุกำลังปกคลุม · ${atRisk} สถานีเข้าระดับเสี่ยง`
+      : `⚠️ ${atRisk} สถานีเข้าระดับเสี่ยงสูง`
+    const text = `${situation} — AI เสนอแผนระบายทั้งเครือข่าย (${Math.max(drainable, actionable.length)} จุด)`
+    set((s) => ({
+      planAlert: { id: uid('alert'), text, actionable: actionable.length, drainable, ts: now },
+      activityLog: [
+        log(`🧠📢 Heuristic v1 แจ้งศูนย์ควบคุม: ${text} · รออนุมัติ`, 'alert'),
+        ...s.activityLog,
+      ].slice(0, 40),
+    }))
   }
 
   // ── simulation tick: inflow from rain, drain from pumping ─────────────────
@@ -179,7 +239,9 @@ export const useAppStore = create<AppState>((set, get) => {
       let target = s.targetLevel + inflow
       let pumping = s.pumping
       if (pumping) {
-        target -= 1.5 + s.capacity_cms / 45 // big stations drain visibly faster
+        // Drain must beat storm inflow (peaks ~2.2/tick) so an activated plan
+        // pulls levels down even at the climax — the whole point of the demo.
+        target -= 2.4 + s.capacity_cms / 30 // big stations drain visibly faster
         if (target <= 34) {
           pumping = false
           anyStopped = s.name
@@ -261,6 +323,10 @@ export const useAppStore = create<AppState>((set, get) => {
           ].slice(0, 40),
         })
       }
+    } else if (after.mode === 'heuristic') {
+      // Heuristic v1 doesn't act on its own — it notifies the main center and
+      // waits for a human to approve.
+      maybeRaisePlanAlert()
     }
   }
 
@@ -313,6 +379,7 @@ export const useAppStore = create<AppState>((set, get) => {
     stormPhase: 'idle',
     feeds: { rain: 'cached', water: 'cached', tide: 'modeled', stations: 'cached' },
     selectedStationId: null,
+    planAlert: null,
 
     init: async () => {
       if (get().ready) return
@@ -407,7 +474,13 @@ export const useAppStore = create<AppState>((set, get) => {
           : mode === 'heuristic'
             ? '🧠 โหมด Heuristic v1 — AI เสนอแผน เจ้าหน้าที่กดอนุมัติทีละจุด'
             : '🕹️ โหมดควบคุมด้วยมือ — เจ้าหน้าที่สั่งการเองทุกจุด'
-      set((s) => ({ mode, activityLog: [log(msg, 'system'), ...s.activityLog].slice(0, 40) }))
+      // Leaving heuristic clears any pending notification; entering it offers the plan right away.
+      set((s) => ({
+        mode,
+        planAlert: mode === 'heuristic' ? s.planAlert : null,
+        activityLog: [log(msg, 'system'), ...s.activityLog].slice(0, 40),
+      }))
+      if (mode === 'heuristic') maybeRaisePlanAlert(true)
     },
 
     approve: (recId) => {
@@ -415,7 +488,28 @@ export const useAppStore = create<AppState>((set, get) => {
       if (rec) execute(rec.stationId, rec.action)
     },
     commandStation: (stationId) => execute(stationId, 'pump'),
+    stopStation: (stationId) => {
+      const { stations, activityLog } = get()
+      const st = stations.find((s) => s.id === stationId)
+      if (!st || !st.pumping) return
+      const next = stations.map((s) => {
+        if (s.id !== stationId) return s
+        const stopped = { ...s, pumping: false }
+        stopped.status = statusOf(stopped)
+        return stopped
+      })
+      set({
+        stations: next,
+        narration: `⏸ หยุดระบบที่ ${st.name} — รอรับรายงานจากพื้นที่`,
+        activityLog: [
+          log(`⏸ เจ้าหน้าที่สั่งหยุดการระบายที่ ${st.name} (มีรายงานเข้าจากหน้างาน)`, 'system'),
+          ...activityLog,
+        ].slice(0, 40),
+      })
+      refreshRecommendations()
+    },
     selectStation: (stationId) => set({ selectedStationId: stationId }),
+    dismissPlanAlert: () => set({ planAlert: null }),
 
     equalizeNetwork: () => {
       const { stations, activityLog, cityRisk } = get()
@@ -468,6 +562,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
     reset: () => {
       autoAnnounced.clear()
+      lastPlanAlertAt = 0
       const s = get()
       const levels = (s.stations.length ? s.stations : []).map((st) => ({
         ...st,
@@ -483,6 +578,7 @@ export const useAppStore = create<AppState>((set, get) => {
         stormPhase: 'idle',
         stations: levels,
         recommendations: [],
+        planAlert: null,
         narration: '↺ รีเซ็ตสถานการณ์แล้ว · ระบบกลับสู่การเฝ้าระวังปกติ',
         activityLog: [log('↺ รีเซ็ตสถานการณ์จำลอง', 'system'), ...s.activityLog].slice(0, 40),
       })

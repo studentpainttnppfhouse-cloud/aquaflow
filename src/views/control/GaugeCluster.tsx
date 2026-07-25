@@ -37,7 +37,7 @@ export default function GaugeCluster() {
 
   return (
     <CollapsiblePanel id="gauge-cluster" icon="🌡️" title="เกจวัดระดับน้ำเครือข่าย" defaultOpen mobileDefaultOpen={false}>
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[auto_1fr] lg:items-center">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[auto_minmax(22rem,1.4fr)] lg:items-center">
         <div className="flex flex-wrap items-start justify-around gap-5 sm:justify-start sm:gap-8">
           <GaugeBar label="ความเสี่ยงเมือง" value={cityRisk.toFixed(0)} unit="%" pct={cityRisk} tone={riskColor} sub={riskLabel} />
           <GaugeBar

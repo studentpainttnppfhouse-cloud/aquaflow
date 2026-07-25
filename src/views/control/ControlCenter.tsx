@@ -10,6 +10,7 @@ import GaugeCluster from './GaugeCluster'
 import StatStrip from './StatStrip'
 import Footer from './Footer'
 import EmergencyBroadcast from './EmergencyBroadcast'
+import PlanAlert from './PlanAlert'
 import { ActivityLog, RainRadar, StationBars } from './SidePanels'
 import { fmtClock } from '../../lib/util'
 
@@ -32,13 +33,14 @@ export default function ControlCenter() {
         <section className="glass-panel relative order-1 min-h-[52vh] flex-1 overflow-hidden lg:order-2 lg:min-h-0">
           <MapPanel mapRef={mapRef} />
           <NodeDetail />
+          <PlanAlert />
         </section>
       </div>
-      <div className="shrink-0 px-2 pt-0">
-        <EmergencyBroadcast />
+      <div className="shrink-0 px-2 pt-2">
+        <GaugeCluster />
       </div>
       <div className="shrink-0 px-2 pb-2 pt-2">
-        <GaugeCluster />
+        <EmergencyBroadcast />
       </div>
       <Footer mapRef={mapRef} />
     </div>

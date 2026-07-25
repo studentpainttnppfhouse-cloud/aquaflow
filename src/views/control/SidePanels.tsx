@@ -163,20 +163,20 @@ export function TideSpark() {
   const path = win.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.h).toFixed(1)}`).join(' ')
   const nowPt = win.reduce((best, p) => (Math.abs(p.t - now) < Math.abs(best.t - now) ? p : best), win[0])
   return (
-    <div>
+    <div className="w-full">
       <div className="flex items-center justify-between">
-        <h3 className="label-tech-lit">น้ำขึ้น–ลง เจ้าพระยา</h3>
+        <h3 className="label-tech-lit">🌊 น้ำขึ้น–ลง แม่น้ำเจ้าพระยา</h3>
         <LiveBadge feed={tide.source} title={tide.source === 'modeled' ? 'แบบจำลองฮาร์มอนิก (ติดป้ายชัดเจน)' : 'Open-Meteo Marine / WorldTides'} />
       </div>
-      <svg viewBox="0 0 240 60" preserveAspectRatio="none" className="mt-1.5 h-20 w-full sm:h-24">
+      <svg viewBox="0 0 240 60" preserveAspectRatio="none" className="mt-2 h-28 w-full sm:h-40">
         <path d={path} fill="none" stroke="#2DE0C8" strokeWidth="2" vectorEffect="non-scaling-stroke" />
         <circle cx={x(nowPt.t)} cy={y(nowPt.h)} r="3.5" fill="#2DE0C8" />
         <line x1={x(nowPt.t)} y1="0" x2={x(nowPt.t)} y2="60" stroke="#2DE0C8" strokeWidth="0.5" strokeDasharray="2 3" />
       </svg>
-      <div className="flex justify-between text-[10px] text-hud-dim">
+      <div className="mt-1 flex justify-between text-[11px] text-hud-dim">
         <span>-6 ชม.</span>
         <span className="data-value font-bold text-hud-cyan">
-          ตอนนี้ {tide.height.toFixed(2)} ม. {tide.phase === 'rising' ? '▲' : '▼'}
+          ตอนนี้ {tide.height.toFixed(2)} ม. {tide.phase === 'rising' ? '▲ ขึ้น' : '▼ ลง'}
         </span>
         <span>+18 ชม.</span>
       </div>

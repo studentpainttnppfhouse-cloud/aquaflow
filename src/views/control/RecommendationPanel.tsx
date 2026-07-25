@@ -13,13 +13,16 @@ export default function RecommendationPanel() {
   const stations = useAppStore((s) => s.stations)
   const cityRisk = useAppStore((s) => s.cityRisk)
   const storm = useAppStore((s) => s.storm)
+  const mode = useAppStore((s) => s.mode)
   const approve = useAppStore((s) => s.approve)
+  const stopStation = useAppStore((s) => s.stopStation)
   const equalizeNetwork = useAppStore((s) => s.equalizeNetwork)
   const [expanded, setExpanded] = useState<string | null>(null)
 
   const actionable = recommendations.filter((r) => r.action !== 'wait')
   const atRisk = stations.filter((s) => s.status === 'risk').length
   const pumping = stations.filter((s) => s.pumping).length
+  const pumpingStations = stations.filter((s) => s.pumping)
   const drainable = stations.filter((s) => !s.pumping && s.level > 45).length
 
   // One honest situation sentence — replaces the separate "notification" surface.
@@ -74,7 +77,39 @@ export default function RecommendationPanel() {
         <p className="mt-1.5 text-[11px] leading-4 text-hud-dim">
           กดครั้งเดียว — ระบบเปิดประตู/สั่งสูบทุกจุดที่น้ำสูงพร้อมกัน แล้วดึงระดับน้ำทุกพื้นที่เข้าสู่สมดุลโดยอัตโนมัติ
         </p>
+        {mode === 'heuristic' && (
+          <p className="mt-1.5 flex items-center gap-1 text-[11px] leading-4 text-hud-cyan/80">
+            🧠📢 โหมด Heuristic v1 จะเด้งแจ้งเตือนแผนนี้ที่หน้าจอศูนย์ควบคุมด้วย และจะเลือนหายเองหากไม่กดภายในไม่กี่วินาที
+          </p>
+        )}
       </div>
+
+      {/* Currently draining — one-tap stop per station, e.g. when a field report comes in. */}
+      {pumpingStations.length > 0 && (
+        <div className="rounded-lg border border-hud-cyan/25 bg-hud-cyan/5 p-2">
+          <div className="label-tech mb-1.5 flex items-center justify-between px-0.5">
+            <span>💧 กำลังระบายอยู่ · หยุดรายจุดได้</span>
+            <span className="data-value text-hud-cyan">{pumpingStations.length}</span>
+          </div>
+          <ul className="max-h-40 space-y-1 overflow-y-auto panel-scroll">
+            {pumpingStations.map((s) => (
+              <li key={s.id} className="flex items-center gap-2 rounded-md bg-black/25 px-2 py-1">
+                <span className="min-w-0 flex-1 truncate text-xs text-hud-text/85">
+                  {s.name.replace('สถานีสูบน้ำ', 'สน.').replace('ประตูระบายน้ำ', 'ปตร.')}
+                </span>
+                <span className="data-value shrink-0 text-[11px] text-hud-dim">{s.level.toFixed(0)}%</span>
+                <button
+                  onClick={() => stopStation(s.id)}
+                  className="shrink-0 rounded-md border border-hud-coral/40 bg-hud-coral/10 px-2 py-0.5 text-[11px] font-bold text-hud-coral transition hover:bg-hud-coral/25"
+                  title="หยุดการระบายที่จุดนี้ (มีรายงานเข้าจากพื้นที่)"
+                >
+                  ⏸ หยุด
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {actionable.length > 0 && (
         <div className="label-tech px-1 pt-1">ไล่ทีละจุด (ถ้าต้องการ)</div>
