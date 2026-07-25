@@ -181,7 +181,15 @@ function computeTargetRisk(stations: StationState[], rainCity: number, tide: Tid
   const wLevel = stations.reduce((s, x) => s + x.targetLevel * x.capacity_cms, 0) / capSum
   const tideMid = (tide.range[0] + tide.range[1]) / 2
   const tideFactor = tide.phase === 'rising' && tide.height > tideMid ? 8 : 0
-  return clamp(wLevel * 0.85 + Math.min(20, rainCity * 1.4) + tideFactor, 3, 99)
+  // Coordinated-response credit: when a large share of network capacity is
+  // actively draining, the city is measurably safer *now* (water is leaving
+  // faster than the stored levels alone imply). This makes activating the plan
+  // pull the risk number down immediately — even mid-storm — instead of only
+  // after levels have finished easing. Capped so risk never fully hides an
+  // ongoing storm.
+  const pumpCap = stations.reduce((s, x) => s + (x.pumping ? x.capacity_cms : 0), 0)
+  const drainRelief = (capSum ? pumpCap / capSum : 0) * 26
+  return clamp(wLevel * 0.85 + Math.min(20, rainCity * 1.4) + tideFactor - drainRelief, 3, 99)
 }
 
 let loopsStarted = false
@@ -307,7 +315,9 @@ export const useAppStore = create<AppState>((set, get) => {
       let target = s.targetLevel + inflow
       let pumping = s.pumping
       if (pumping) {
-        target -= 1.5 + s.capacity_cms / 45
+        // Drain must beat storm inflow (peaks ~2.2/tick) so an activated plan
+        // pulls levels down even at the climax — the whole point of the demo.
+        target -= 2.4 + s.capacity_cms / 30
         if (target <= 34) {
           pumping = false
           anyStopped = s.name
