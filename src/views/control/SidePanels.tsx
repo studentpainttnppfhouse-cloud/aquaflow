@@ -1,66 +1,15 @@
-import { useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import LiveBadge from '../../components/LiveBadge'
 import CollapsiblePanel from '../../components/CollapsiblePanel'
 import { next3hMm } from '../../data/adapters/openMeteo'
-import type { StationState } from '../../data/types'
-
-type SortKey = 'level' | 'risk' | 'capacity' | 'district'
-const SORTS: { id: SortKey; label: string }[] = [
-  { id: 'level', label: 'ระดับน้ำ' },
-  { id: 'risk', label: 'ความเสี่ยง' },
-  { id: 'capacity', label: 'กำลังระบาย' },
-  { id: 'district', label: 'เขต' },
-]
-const STATUS_RANK = { risk: 3, watch: 2, pumping: 1, ok: 0 } as const
-const LIMIT = 60
-
-function sortStations(stations: StationState[], key: SortKey): StationState[] {
-  const arr = [...stations]
-  switch (key) {
-    case 'risk':
-      return arr.sort((a, b) => STATUS_RANK[b.status] - STATUS_RANK[a.status] || b.level - a.level)
-    case 'capacity':
-      return arr.sort((a, b) => b.capacity_cms - a.capacity_cms)
-    case 'district':
-      return arr.sort((a, b) => a.district.localeCompare(b.district, 'th') || b.level - a.level)
-    default:
-      return arr.sort((a, b) => b.level - a.level)
-  }
-}
 
 export function StationBars() {
   const stations = useAppStore((s) => s.stations)
-  const [sort, setSort] = useState<SortKey>('risk')
-  const sorted = sortStations(stations, sort)
-  const shown = sorted.slice(0, LIMIT)
+  const sorted = [...stations].sort((a, b) => b.level - a.level)
   return (
-    <CollapsiblePanel
-      id="station-levels"
-      icon="📊"
-      title="ระดับน้ำรายสถานี"
-      defaultOpen={false}
-      badge={
-        <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-bold text-hud-dim">{stations.length}</span>
-      }
-      actions={
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value as SortKey)}
-          onClick={(e) => e.stopPropagation()}
-          aria-label="เรียงลำดับสถานี"
-          className="rounded-md border border-hud-edge bg-black/40 px-1.5 py-0.5 text-[11px] font-semibold text-hud-text outline-none focus:border-hud-cyan"
-        >
-          {SORTS.map((s) => (
-            <option key={s.id} value={s.id}>
-              เรียง: {s.label}
-            </option>
-          ))}
-        </select>
-      }
-    >
+    <CollapsiblePanel id="station-levels" icon="📊" title="ระดับน้ำรายสถานี" defaultOpen={false} resizable>
       <ul className="space-y-1.5">
-        {shown.map((s) => (
+        {sorted.map((s) => (
           <li key={s.id} className="text-xs">
             <div className="flex items-baseline justify-between gap-2">
               <span className="truncate text-hud-text/85">{s.name.replace('สถานีสูบน้ำ', 'สน.').replace('ประตูระบายน้ำ', 'ปตร.')}</span>
@@ -83,11 +32,6 @@ export function StationBars() {
           </li>
         ))}
       </ul>
-      {sorted.length > LIMIT && (
-        <p className="mt-2 text-center text-[10px] text-hud-dim">
-          แสดง {LIMIT} จาก {sorted.length} สถานี (เรียงตาม{SORTS.find((x) => x.id === sort)?.label})
-        </p>
-      )}
     </CollapsiblePanel>
   )
 }
@@ -154,6 +98,7 @@ export function RainRadar() {
 
 export function TideSpark() {
   const tide = useAppStore((s) => s.tide)
+  const tideFeed = useAppStore((s) => s.feeds.tide)
   const now = Date.now()
   const win = tide.series.filter((p) => p.t >= now - 6 * 3600e3 && p.t <= now + 18 * 3600e3)
   if (!win.length) return null
@@ -163,20 +108,20 @@ export function TideSpark() {
   const path = win.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.h).toFixed(1)}`).join(' ')
   const nowPt = win.reduce((best, p) => (Math.abs(p.t - now) < Math.abs(best.t - now) ? p : best), win[0])
   return (
-    <div className="w-full">
+    <div>
       <div className="flex items-center justify-between">
-        <h3 className="label-tech-lit">🌊 น้ำขึ้น–ลง แม่น้ำเจ้าพระยา</h3>
-        <LiveBadge feed={tide.source} title={tide.source === 'modeled' ? 'แบบจำลองฮาร์มอนิก (ติดป้ายชัดเจน)' : 'Open-Meteo Marine / WorldTides'} />
+        <h3 className="label-tech-lit">น้ำขึ้น–ลง เจ้าพระยา</h3>
+        <LiveBadge feed={tideFeed} title={tide.source === 'modeled' ? 'แบบจำลองฮาร์มอนิก (ติดป้ายชัดเจน)' : 'Open-Meteo Marine / WorldTides (สำรอง)'} />
       </div>
-      <svg viewBox="0 0 240 60" preserveAspectRatio="none" className="mt-2 h-28 w-full sm:h-40">
+      <svg viewBox="0 0 240 60" preserveAspectRatio="none" className="mt-1.5 h-20 w-full sm:h-24">
         <path d={path} fill="none" stroke="#2DE0C8" strokeWidth="2" vectorEffect="non-scaling-stroke" />
         <circle cx={x(nowPt.t)} cy={y(nowPt.h)} r="3.5" fill="#2DE0C8" />
         <line x1={x(nowPt.t)} y1="0" x2={x(nowPt.t)} y2="60" stroke="#2DE0C8" strokeWidth="0.5" strokeDasharray="2 3" />
       </svg>
-      <div className="mt-1 flex justify-between text-[11px] text-hud-dim">
+      <div className="flex justify-between text-[10px] text-hud-dim">
         <span>-6 ชม.</span>
         <span className="data-value font-bold text-hud-cyan">
-          ตอนนี้ {tide.height.toFixed(2)} ม. {tide.phase === 'rising' ? '▲ ขึ้น' : '▼ ลง'}
+          ตอนนี้ {tide.height.toFixed(2)} ม. {tide.phase === 'rising' ? '▲' : '▼'}
         </span>
         <span>+18 ชม.</span>
       </div>
@@ -188,8 +133,8 @@ export function ActivityLog() {
   const activityLog = useAppStore((s) => s.activityLog)
   const kindCls = { action: 'text-hud-cyan', system: 'text-hud-dim', alert: 'text-hud-amber' } as const
   return (
-    <CollapsiblePanel id="activity-log" icon="📜" title="บันทึกการปฏิบัติการ" defaultOpen mobileDefaultOpen={false} className="lg:max-h-[16rem]">
-      <ul className="max-h-48 space-y-1 overflow-y-auto text-xs panel-scroll">
+    <CollapsiblePanel id="activity-log" icon="📜" title="บันทึกการปฏิบัติการ" defaultOpen mobileDefaultOpen={false} resizable>
+      <ul className="space-y-1 text-xs">
         {activityLog.length === 0 && <li className="p-2 text-hud-dim">ยังไม่มีเหตุการณ์</li>}
         {activityLog.map((e) => (
           <li key={e.id} className="flex gap-2">

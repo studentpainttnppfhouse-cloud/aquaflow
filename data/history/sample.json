@@ -1,0 +1,53 @@
+{
+  "_note": "Committed seed sample for the Track B historical loader so the tester runs with no external data. Values are illustrative/normalized, not authoritative records. Real raw sources (2011 floods, Hat Yai 2568, ONWR/สทนช., BMA pump logs) are wired via TODO(paint) normalizers in src/learn/history/load.ts.",
+  "rows": [
+    {
+      "event": "มหาอุทกภัย 2554 (2011 Thailand floods) — Bangkok peak",
+      "timestamp": "2011-10-28T00:00:00+07:00",
+      "rainfall_mm": 344,
+      "waterLevels": { "chaophraya": 2.53, "premprachakon": 1.9, "latphrao": 1.7 },
+      "pumpActions": [
+        { "stationId": "premprachakon", "action": "pump", "at": "2011-10-27T22:00:00+07:00" },
+        { "stationId": "bangsue-pump", "action": "pump", "at": "2011-10-27T23:30:00+07:00" },
+        { "stationId": "latphrao-gate", "action": "open_gate", "at": "2011-10-28T01:00:00+07:00" }
+      ],
+      "outcome": "major_flood",
+      "provenance": "seed:2011"
+    },
+    {
+      "event": "อุทกภัยหาดใหญ่ 2568 (Hat Yai 2025) — reference regime",
+      "timestamp": "2025-11-22T00:00:00+07:00",
+      "rainfall_mm": 288,
+      "waterLevels": { "u-taphao": 2.1, "canal-r1": 1.6 },
+      "pumpActions": [
+        { "stationId": "r1", "action": "pump", "at": "2025-11-21T20:00:00+07:00" },
+        { "stationId": "r6", "action": "open_gate", "at": "2025-11-21T21:00:00+07:00" }
+      ],
+      "outcome": "major_flood",
+      "provenance": "seed:hatyai2568"
+    },
+    {
+      "event": "ฝนตกหนักพระโขนง–สุขุมวิท (contained)",
+      "timestamp": "2023-09-14T16:00:00+07:00",
+      "rainfall_mm": 78,
+      "waterLevels": { "phrakhanong": 0.9, "saensaep": 0.8 },
+      "pumpActions": [
+        { "stationId": "phrakhanong", "action": "pump", "at": "2023-09-14T15:30:00+07:00" }
+      ],
+      "outcome": "contained",
+      "provenance": "seed:bkk-logs"
+    },
+    {
+      "event": "ฝนสะสมลาดพร้าว–จตุจักร (minor)",
+      "timestamp": "2022-08-03T17:30:00+07:00",
+      "rainfall_mm": 121,
+      "waterLevels": { "latphrao": 1.25, "bangsue": 1.1 },
+      "pumpActions": [
+        { "stationId": "latphrao-gate", "action": "open_gate", "at": "2022-08-03T17:00:00+07:00" },
+        { "stationId": "bangsue-tunnel", "action": "pump", "at": "2022-08-03T17:20:00+07:00" }
+      ],
+      "outcome": "minor_flood",
+      "provenance": "seed:bkk-logs"
+    }
+  ]
+}

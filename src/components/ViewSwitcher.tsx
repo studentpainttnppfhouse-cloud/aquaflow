@@ -10,12 +10,12 @@ export default function ViewSwitcher() {
       active ? 'bg-hud-cyan text-slate-900' : 'text-hud-text/80 hover:bg-white/10'
     }`
   return (
-    <div className="fixed right-3 top-3 z-[1200] flex items-center gap-1 rounded-full border border-hud-edge bg-hud-panelSolid/90 p-1 shadow-lg backdrop-blur">
-      <button className={btn(view.includes('control'))} onClick={() => setView('control')}>
-        🖥️ ศูนย์ควบคุม
+    <div className="fixed right-2 top-2 z-[1200] flex items-center gap-1 rounded-full border border-hud-edge bg-hud-panelSolid/90 p-1 shadow-lg backdrop-blur sm:right-3 sm:top-3">
+      <button className={btn(view.includes('control'))} onClick={() => setView('control')} title="ศูนย์ควบคุม">
+        🖥️<span className="hidden sm:inline"> ศูนย์ควบคุม</span>
       </button>
-      <button className={btn(view.includes('citizen'))} onClick={() => setView('citizen')}>
-        📱 ประชาชน
+      <button className={btn(view.includes('citizen'))} onClick={() => setView('citizen')} title="มุมมองประชาชน">
+        📱<span className="hidden sm:inline"> ประชาชน</span>
       </button>
       <button
         className="rounded-full px-2 py-1 text-xs text-hud-dim hover:bg-white/10"

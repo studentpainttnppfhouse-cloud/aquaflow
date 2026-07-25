@@ -11,12 +11,59 @@ that sees the same event in real time.
 Two perspectives, one shared live state:
 
 - **🖥️ Control Center** (government, desktop, dark HUD) — real Leaflet map of Bangkok
-  with actual pump stations / floodgates / drainage tunnels, live weather + tide chips,
-  per-station levels, a coordinated AI recommendation panel with an approve flow,
-  storm simulator, and an activity log.
+  with **~190 pump stations / floodgates / drainage tunnels across all 50 districts**,
+  a **glowing Chao Phraya main line** that the city's water discharges into from every
+  side, live weather + tide chips, and a plan that **updates itself continuously from
+  the rain radar** (no per-station clicking required).
+  - **Areas rail** — every district as a sortable card (by risk / level / stations-to-drain
+    / name); each area can be **activated with an approval gate** before its plan runs.
+  - **Notifications & approvals rail** — pre-contemplated plans and *flood-soon* warnings
+    arrive here with **Approve / Reject**; approving runs that area's drain plan automatically.
+  - **Three ops modes** — แนะนำ–ยืนยัน (approve everything) · กึ่งอัตโนมัติ · **⚡ อัตโนมัติ**
+    (a self-balancing *equalizer* that drains and levels the network on its own to keep risk low).
+  - **Click any station → a floating detail card**; open the **per-station planner drawer**
+    for in-depth real-time info and a clear **"OK to discharge more, or not"** verdict based on
+    downstream-node headroom and the Chao Phraya tide.
+  - **Richer bottom bar** — gauges + tide plus total discharge online, capacity utilisation,
+    at-risk / watch counts, active areas, 3-h rain, and river intake headroom.
 - **📱 Citizen app** (mobile, light, phone-framed) — your district's flood risk,
   nearby canal levels, a local mini-map, push-style alerts, and safety tips.
   When the operator approves a drain action, the citizen card visibly eases red → green.
+
+## 📣 Reach every phone — multi-channel alerting
+
+A dashboard only helps people who are looking at it. AquaFlow's alerting layer is
+built so a warning lands on **every** phone in a district — a basic feature phone
+with no app and weak signal included — not only on smartphones:
+
+- **One `sendAlert()` fans out over four channels** (`src/engine/alerting.ts`):
+  📩 **SMS** (every handset) · 📡 **Cell Broadcast** (emergency broadcast to a whole
+  cell tower) · 💬 **LINE** (smartphone users) · 📞 **สายด่วนเสียง / IVR** (an
+  automated Thai voice call + in-app read-aloud for the elderly and non-readers).
+- **Every provider sits behind one `ChannelProvider` interface**, so a real gateway
+  drops in unchanged — Twilio / ThaiBulkSMS / AIS / TrueMove for SMS, Thailand's
+  **DDPM (ปภ.) Cell Broadcast**, the **LINE Messaging API**, and a voice/IVR provider.
+  The exact plug-in points are marked `--- REAL GATEWAY GOES HERE ---` in the code.
+- **The AI drives it end-to-end**: each district gets a severity on the escalation
+  ladder (🟢 ปกติ · 🟡 เฝ้าระวัง · 🟠 เตือนภัย · 🔴 ฉุกเฉิน), the planner **auto-drafts a
+  plain-Thai message** for that severity, and the operator broadcasts to one zone or
+  **one-taps "กระจายเตือนทุกเขตที่เสี่ยง"** to hit every affected district at once.
+- **Honest telecom detail**: Thai SMS is UCS-2, not GSM-7, so the UI reports the true
+  segment count (70 chars / part, 67 concatenated) and messages are kept plain — no
+  emoji dependence — so they render on a feature phone.
+- **Delivery ledger + retry**: fan-out shows live per-channel `sent/total` counts,
+  retries failures up to 3× with backoff, and **never fails silently** — an exhausted
+  send ends visibly as `failed`.
+- **Offline resilience**: flip the connectivity simulator and new alerts are **queued**,
+  then automatically **flushed on reconnect** — an alert is never dropped on a bad link.
+- **Zone registry** (`src/data/zones.ts`): per-district population + a representative
+  contact roll grouped by role (ประชาชน / ผู้นำชุมชน / เจ้าหน้าที่). Every name and phone
+  number is **synthetic and deterministic — no real personal data** — standing in for
+  the อบต./เขต rolls and telecom cell-area maps a production deployment would hold.
+
+HONESTY NOTE: like the rest of the demo, the fan-out is **simulated and labeled
+"จำลอง"** — no carrier is actually contacted; the value is the working end-to-end
+loop and the drop-in provider seams.
 
 ## Run it
 
@@ -51,14 +98,90 @@ seeded to a realistic Bangkok bar range) and is **labeled "จำลอง / mod
 
 Keys go in `.env` (see `.env.example`); never commit secrets.
 
+## Two operating modes
+
+The Control Center has one toggle (top conditions bar) with two honest postures —
+the old "semi/auto" modes that fired pumps on their own have been **removed**; the
+system never dispatches a pump without a human approving it.
+
+- **🕹️ Manual** — pure human control. The AI planner is off; every pump/gate runs
+  only when the operator clicks it in the manual console (search + per-station
+  start/stop). This is the mode for **maintenance, testing new equipment, or when
+  a laser/level sensor is faulty and the automatic reading can't be trusted**
+  (low-confidence situations).
+- **🤖 Heuristic** — the AI planner reads the network and proposes a coordinated,
+  tide-aware plan; the operator still approves every action.
+
+## What the AI is fed (data · model · output)
+
+Shown in-app as the **🧠 "ข้อมูลของโมเดล AI" (model card)** panel:
+
+- **Input** — canal/river levels (ThaiWater / HII, สสน.), Chao Phraya tide, per-station
+  3-h rain forecast (Open-Meteo), and **per-station laser/ultrasonic depth**: a bed
+  depth (`bedDepth_m`) turns a % level into a real water-column depth and *metres of
+  freeboard* before the bank, packed with everything else into one **METAR-style coded
+  line per station** (`src/lib/metar.ts`) — the feature vector handed to the planner.
+- **Model** — a transparent heuristic planner v1 (`src/engine/recommend.ts`), non-ML and
+  ML/RL-replaceable behind the same `recommend()` interface, informed by past events
+  (2011 / พ.ศ. 2554 great flood, 2025 / พ.ศ. 2568 southern floods), BMA pumping logs,
+  and published research.
+- **Output** — a ranked, staggered drainage plan (pump / open gate / wait) with a reason
+  and estimated city-risk reduction per action, plus the one-tap "equalize network".
+
+## Data layer — two tracks
+
+The data layer is split into two clearly separated tracks.
+
+### Track A — LIVE (operate; Thailand-first real-time)
+Every real-time source sits behind **one adapter interface** and returns a
+provenance-tagged envelope `Reading<T>` (`src/data/adapters/types.ts`):
+`{ value, unit, source, fetchedAt, provenance, origin, confidence,
+usableForDecision, warnings }`.
+
+- **One config** — `data-sources.config.json` lists each source
+  (`tideLevel`, `canalRiverLevel`, `rainfall`, `pumpGateStatus`) with
+  `endpoint` / `keyEnv` / `refreshIntervalMs` / `fallbackSnapshot`. Real
+  endpoints/keys are `TODO(paint)`.
+- **Graceful degradation** — `runTiers()` walks live → cache → sim per source;
+  a committed snapshot (`src/data/fallback/*`) backs every source so a dead API
+  never crashes the app — it degrades and surfaces a `warning`.
+- **International = backup only** — Open-Meteo / WorldTides can *only* ever be
+  labeled `backup` (purple "สำรอง" chip, `usableForDecision:false`); the rule is
+  enforced in `runTiers()`, so an international source can never silently drive a
+  decision.
+
+### Track B — LEARN (calibrate + ground; OFFLINE, out of the live path)
+Node-only scripts under `src/learn/**` — never imported by the browser app.
+
+1. **Historical loader** (`src/learn/history/`) normalizes past-flood records
+   into one table `{ event, timestamp, rainfall, waterLevels, pumpActions,
+   outcome }`. Raw sources (2011 floods, Hat Yai 2568, ONWR/สทนช., BMA pump
+   logs) are `TODO(paint)` normalizers; a committed `data/history/sample.json`
+   keeps the pipeline runnable.
+2. **Calibration** (`src/learn/calibrate.ts`) proposes tuned planner constants
+   from the history table and writes `learn/artifacts/calibration.json` —
+   **advisory only, never auto-applied** to the live planner.
+3. **Knowledge / RAG** (`src/learn/knowledge/`) — a **local/self-hosted**
+   embedding provider (deterministic stand-in; real model `TODO(paint)`) indexes
+   a committed corpus and grounds operator explanations. Read-only context for
+   humans; never fed back into the planner.
+
+Run the whole pipeline on seed data (no network, no keys needed):
+
+```bash
+npm run learn:test       # end-to-end tester: load → calibrate → RAG → adapter degradation
+npm run learn:calibrate  # write learn/artifacts/calibration.json
+```
+
 ## Honesty labels (read this, judges 🙂)
 
 - **The "AI" is a transparent heuristic planner** (`src/engine/recommend.ts`), not a
   trained model — a deliberate stand-in shaped so an ML/RL policy can replace it
   behind the same `recommend()` interface. It is tide-aware (pump while the river
-  is falling), inflow-aware (per-station Open-Meteo forecast), and coordinated
-  (never recommends every station discharging into the same downstream node —
-  the anti-"move-the-flood-elsewhere" rule staggers them).
+  is falling), inflow-aware (per-station Open-Meteo forecast), depth-aware (laser
+  freeboard from `bedDepth_m`), and coordinated (never recommends every station
+  discharging into the same downstream node — the anti-"move-the-flood-elsewhere"
+  rule staggers them).
 - **Station coordinates are approximate** (`approx: true` in
   `src/data/fallback/stations.json`), seeded from public records of real
   installations; the adapter upgrades them with official open-data geometry when
@@ -76,9 +199,12 @@ src/
                           # rAF easing loop: risk & levels glide to targets over ~1–2 s
   data/adapters/          # openMeteo · thaiWater · tide · stations (live → fallback)
   data/fallback/          # committed snapshots: stations, canals, waterLevels, openMeteo
+  data/zones.ts           # synthetic per-district population + recipient roll (by role)
   engine/recommend.ts     # coordinated heuristic planner (ML-replaceable interface)
+  engine/alerting.ts      # multi-channel fan-out (SMS/cell broadcast/LINE/voice),
+                          # severity ladder, Thai message drafting, retry — provider-abstracted
   views/control/          # ControlCenter · MapPanel · RecommendationPanel · RiskGauge
-                          # StatStrip · Narration · SidePanels (bars, radar, tide)
+                          # StatStrip · Narration · BroadcastPanel · SidePanels (bars, radar, tide)
   views/citizen/          # CitizenApp · HeroStatus · CanalList · Alerts · MiniMap
 ```
 

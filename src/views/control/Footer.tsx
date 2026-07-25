@@ -3,11 +3,15 @@ import { createPortal } from "react-dom";
 import type L from "leaflet";
 import { useAppStore } from "../../store/useAppStore";
 import type { DataFeed } from "../../data/types";
+import type { Provenance } from "../../data/adapters/types";
 import { BANGKOK_CENTER, BANGKOK_ZOOM } from "./MapPanel";
 
-const FEED_SCORE: Record<DataFeed, number> = {
+const FEED_SCORE: Record<Provenance | DataFeed, number> = {
   live: 100,
+  cache: 68,
   cached: 68,
+  backup: 55,
+  sim: 40,
   modeled: 40,
 };
 
@@ -46,7 +50,6 @@ export default function Footer({ mapRef }: { mapRef: React.RefObject<L.Map> }) {
   const feeds = useAppStore((s) => s.feeds);
   const stations = useAppStore((s) => s.stations);
   const mode = useAppStore((s) => s.mode);
-  const setMode = useAppStore((s) => s.setMode);
   const storm = useAppStore((s) => s.storm);
   const activityLog = useAppStore((s) => s.activityLog);
   const selectStation = useAppStore((s) => s.selectStation);
@@ -82,19 +85,14 @@ export default function Footer({ mapRef }: { mapRef: React.RefObject<L.Map> }) {
         tone={networkLoad > 70 ? "coral" : networkLoad > 0 ? "amber" : "cyan"}
       />
 
-      <div className="ml-auto flex items-center gap-1.5">
-        <button
-          onClick={() => setMode(mode === "manual" ? "heuristic" : "manual")}
-          aria-pressed={mode === "manual"}
-          className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
-            mode === "manual"
-              ? "border-hud-coral/50 bg-hud-coral/15 text-hud-coral"
-              : "border-hud-edge text-hud-dim hover:text-hud-text"
-          }`}
-          title="เข้าควบคุมด้วยมือทันที — หยุดการสั่งการอัตโนมัติของ AI"
-        >
-          🕹️ Manual Override
-        </button>
+      <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+        <span className="hidden items-center gap-1.5 rounded-full border border-hud-edge bg-black/20 px-2.5 py-1 text-xs font-bold sm:inline-flex">
+          {mode === "manual" ? (
+            <span className="text-hud-amber">🕹️ โหมดควบคุมด้วยมือ</span>
+          ) : (
+            <span className="text-hud-cyan">🤖 โหมดฮิวริสติก (AI)</span>
+          )}
+        </span>
 
         <div className="relative">
           <button
